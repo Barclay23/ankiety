@@ -9,8 +9,8 @@ from datetime import datetime
 class SurveyApp:
     def __init__(self):
         # Configuration
-        self.ADMIN_EMAIL = "survey.admin@example.com"  # Replace with actual email
-        self.SMTP_SERVER = "smtp.gmail.com"  # Replace with your SMTP server
+        self.ADMIN_EMAIL = "barclay.incogni@wp.pl"  # Replace with actual email
+        self.SMTP_SERVER = "smtp.wp.pl"  # Replace with your SMTP server
         self.SMTP_PORT = 587  # Typical port for TLS
         
         # Survey questions
@@ -37,7 +37,7 @@ class SurveyApp:
         try:
             # Create message
             msg = MIMEMultipart()
-            msg['From'] = "survey.app@example.com"
+            msg['From'] = "barclay.incogni@wp.pl"
             msg['To'] = self.ADMIN_EMAIL
             msg['Subject'] = f"Survey Results - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
 

@@ -43,7 +43,7 @@ if st.session_state.mode == "timer":
     if st.session_state.question_index >= len(QUESTIONS):
         st.session_state.mode = "relaxed"  # Switch mode
         st.session_state.question_index = 0  # Reset index
-        st.rerun()
+        st.experimental_rerun()
 
 # Relaxed mode
 elif st.session_state.mode == "relaxed":
@@ -69,9 +69,9 @@ elif st.session_state.mode == "relaxed":
             st.write("Survey completed! Thanks for participating.")
             st.json(st.session_state.answers)
             st.stop()
-        st.rerun()
+        st.experimental_rerun()
     
     if st.session_state.question_index > 0 and st.button("Previous"):
         st.session_state.question_index -= 1
         st.session_state.start_time = None
-        st.rerun()
+        st.experimental_rerun()
