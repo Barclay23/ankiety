@@ -132,10 +132,6 @@ def render_question(question, key_prefix):
 # --- Session State Initialization ---
 if "dynamic_questions" not in st.session_state:
     st.session_state.dynamic_questions = list(QUESTIONS)  # Clone the original list
-    for q in QUESTIONS:
-        if "follow_up" in q:
-            q["follow_up_inserted"] = False
-
 if "mode" not in st.session_state:
     st.session_state.mode = "timer"
 if "answers" not in st.session_state:
@@ -150,37 +146,24 @@ if "timer_expired" not in st.session_state:
     st.session_state.timer_expired = False
 
 
-def go_to_next_question(selected_answer=None):
-    q_idx = st.session_state.question_index
-    current_question = st.session_state.dynamic_questions[q_idx]
+def go_to_next_question():
+    current_question = st.session_state.dynamic_questions[st.session_state.question_index]
 
-    # Store the answer
-    mode = st.session_state.mode
-    if len(st.session_state.answers[mode]) > q_idx:
-        st.session_state.answers[mode][q_idx] = selected_answer
-    else:
-        st.session_state.answers[mode].append(selected_answer)
+    # Check for follow-up logic
+    if current_question.get("follow_up"):
+        answer_list = st.session_state.answers[st.session_state.mode]
+        if answer_list:
+            selected_answer = answer_list[-1]
+            if selected_answer == current_question["follow_up"]["trigger_answer"]:
+                st.session_state.dynamic_questions.insert(
+                    st.session_state.question_index + 1,
+                    current_question["follow_up"]["question"]
+                )
 
-    elapsed = time.time() - st.session_state.start_time if st.session_state.start_time else 0
-    if len(st.session_state.times[mode]) > q_idx:
-        st.session_state.times[mode][q_idx] = round(elapsed, 2)
-    else:
-        st.session_state.times[mode].append(round(elapsed, 2))
-
-    # Only add follow-up once
-    if current_question.get("follow_up") and not current_question.get("follow_up_inserted"):
-        if selected_answer == current_question["follow_up"]["trigger_answer"]:
-            st.session_state.dynamic_questions.insert(
-                q_idx + 1, current_question["follow_up"]["question"]
-            )
-            current_question["follow_up_inserted"] = True
-
-    # Proceed
     st.session_state.question_index += 1
     st.session_state.start_time = None
     st.session_state.timer_expired = False
     st.rerun()
-
 
 
 
@@ -210,7 +193,7 @@ def timer_mode():
             st.session_state.times["timer"].append(round(elapsed, 2))
 
             if q_idx + 1 < len(st.session_state.dynamic_questions):
-                go_to_next_question(selected)
+                go_to_next_question()
             else:
                 st.session_state.mode = "relaxed"
                 st.session_state.question_index = 0
@@ -246,7 +229,7 @@ def relaxed_mode():
             st.session_state.times["relaxed"].append(round(elapsed, 2))
 
         if q_idx + 1 < len(st.session_state.dynamic_questions):
-            go_to_next_question(selected)
+            go_to_next_question()
         else:
             show_results()
 

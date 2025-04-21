@@ -6,83 +6,7 @@ from datetime import datetime
 # Set page config
 st.set_page_config(page_title="Dual-Mode Survey Application", layout="wide")
 
-# Apply custom CSS for blue background and white text
-st.markdown("""
-<style>
-    /* Main background and text color */
-    .stApp {
-        background-color: #1E3A8A;
-        color: white;
-    }
-    
-    /* Style for headers */
-    h1, h2, h3, h4, h5, h6 {
-        color: white !important;
-    }
-    
-    /* Style for standard text */
-    p, div, span, label {
-        color: white !important;
-    }
-    
-    /* Style for warning, info and other message containers */
-    .stAlert > div {
-        color: white !important;
-        background-color: rgba(255, 255, 255, 0.1) !important;
-        border-color: rgba(255, 255, 255, 0.2) !important;
-    }
-    
-    /* Style for radio buttons text */
-    .stRadio label {
-        color: white !important;
-    }
-    
-    /* Style for button text */
-    .stButton button {
-        color: white !important;
-        background-color: #3B82F6 !important;
-        border-color: #60A5FA !important;
-    }
-    
-    /* Style for button hover */
-    .stButton button:hover {
-        background-color: #2563EB !important;
-    }
-    
-    /* Tables styling */
-    .dataframe {
-        color: white !important;
-    }
-    
-    .dataframe th {
-        background-color: #2563EB !important;
-        color: white !important;
-    }
-    
-    .dataframe td {
-        background-color: #3B82F6 !important;
-        color: white !important;
-    }
-    
-    /* Progress bar styling */
-    .stProgress > div > div {
-        background-color: #60A5FA !important;
-    }
-    
-    /* Fix for markdown text */
-    .css-1offfwp p {
-        color: white !important;
-    }
-    
-    /* Radio buttons styling */
-    .stRadio > div[role="radiogroup"] > label > div {
-        background-color: rgba(255, 255, 255, 0.1) !important;
-        border-color: rgba(255, 255, 255, 0.2) !important;
-    }
-</style>
-""", unsafe_allow_html=True)
-
-# Initialize session state variables with proper type hints for improved maintainability
+# Initialize session state variables if they don't exist
 if 'mode' not in st.session_state:
     st.session_state.mode = "timer_mode"  # Start with timer mode
 if 'current_question' not in st.session_state:
@@ -135,14 +59,12 @@ questions = [
 ]
 
 def switch_to_relaxed_mode():
-    """Switch from timer mode to relaxed mode."""
     st.session_state.mode = "relaxed_mode"
     st.session_state.current_question = 0
     st.session_state.timer_mode_completed = True
     st.session_state.question_start_time = datetime.now()
 
 def next_question():
-    """Move to the next question or switch modes if at the end."""
     if st.session_state.current_question < len(questions) - 1:
         st.session_state.current_question += 1
         if st.session_state.mode == "relaxed_mode":
@@ -157,14 +79,12 @@ def next_question():
             st.session_state.mode = "completed"
 
 def previous_question():
-    """Move to the previous question (only in relaxed mode)."""
     if st.session_state.current_question > 0:
         st.session_state.current_question -= 1
         if st.session_state.mode == "relaxed_mode":
             st.session_state.question_start_time = datetime.now()
 
 def save_relaxed_answer(idx, selected_option):
-    """Save the answer for relaxed mode and update time tracking."""
     # Save the current answer and update time spent
     st.session_state.relaxed_answers[idx] = selected_option
     if st.session_state.question_start_time is not None:
@@ -175,7 +95,7 @@ def save_relaxed_answer(idx, selected_option):
         st.session_state.question_start_time = datetime.now()
 
 def on_answer_change(idx):
-    """Called when a radio button value changes in relaxed mode."""
+    # This function is called when the radio button value changes
     key = f"relaxed_radio_{idx}"
     if key in st.session_state:
         selected = st.session_state[key]
@@ -183,14 +103,13 @@ def on_answer_change(idx):
             save_relaxed_answer(idx, selected)
 
 def timer_selection_change():
-    """Update the current selection without rerunning the page in timer mode."""
+    # Update the current selection without rerunning the page
     current_idx = st.session_state.current_question
     key = f"timer_radio_{current_idx}"
     if key in st.session_state:
         st.session_state.timer_current_selection = st.session_state[key]
 
 def display_results():
-    """Display the final results from both survey modes."""
     st.title("Survey Results")
     
     col1, col2 = st.columns(2)
@@ -200,9 +119,7 @@ def display_results():
         timer_results = {}
         for i, q in enumerate(questions):
             timer_results[f"Question {i+1}"] = st.session_state.timer_answers.get(i, "No answer")
-        
-        timer_df = pd.DataFrame(list(timer_results.items()), columns=["Question", "Your Answer"])
-        st.table(timer_df)
+        st.table(pd.DataFrame(timer_results.items(), columns=["Question", "Your Answer"]))
     
     with col2:
         st.subheader("Relaxed Mode Answers")
@@ -218,16 +135,9 @@ def display_results():
             "Time Spent": list(time_spent.values())
         })
         st.table(results_df)
-    
-    # Add a restart button
-    if st.button("Start Again", key="restart_button"):
-        # Reset all session state variables
-        for key in list(st.session_state.keys()):
-            del st.session_state[key]
-        st.rerun()
 
 def get_timer_progress():
-    """Calculate the current timer progress value (0-1)."""
+    """Calculate the current timer progress value (0-1)"""
     if st.session_state.mode != "timer_mode":
         return 0
     
@@ -240,7 +150,7 @@ def get_timer_progress():
     return remaining_time / time_limit
 
 def check_timer_expiration():
-    """Check if the timer for current question has expired."""
+    """Check if the timer for current question has expired"""
     if st.session_state.mode != "timer_mode":
         return False
     
@@ -261,7 +171,6 @@ def check_timer_expiration():
     return False
 
 def main():
-    """Main application function."""
     # Only reset timer when necessary (new question)
     if st.session_state.mode == "timer_mode" and st.session_state.reset_timer:
         st.session_state.current_timer_start_time = time.time()
@@ -344,9 +253,7 @@ def main():
         )
         
         # Submit button
-        col1, col2, col3 = st.columns([1, 2, 1])
-        with col2:
-            submitted = st.button("Submit", key=f"timer_submit_{current_idx}", use_container_width=True)
+        submitted = st.button("Submit", key=f"timer_submit_{current_idx}")
         
         # If submitted, save answer and go to next question
         if submitted:
@@ -378,18 +285,17 @@ def main():
         )
         
         # Navigation buttons
-        col1, col2, col3 = st.columns([1, 1, 1])
+        col1, col2 = st.columns(2)
         
         with col1:
             if st.session_state.current_question > 0:
-                if st.button("Previous Question", use_container_width=True):
+                if st.button("Previous Question"):
                     # The current answer is already saved via the on_change callback
                     previous_question()
                     st.rerun()
         
-        with col3:
-            button_text = "Next Question" if current_idx < len(questions) - 1 else "Finish Survey"
-            if st.button(button_text, use_container_width=True):
+        with col2:
+            if st.button("Next Question" if current_idx < len(questions) - 1 else "Finish Survey"):
                 # The current answer is already saved via the on_change callback
                 next_question()
                 st.rerun()

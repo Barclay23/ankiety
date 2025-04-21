@@ -2,87 +2,12 @@ import streamlit as st
 import time
 import pandas as pd
 from datetime import datetime
+import threading
 
 # Set page config
 st.set_page_config(page_title="Dual-Mode Survey Application", layout="wide")
 
-# Apply custom CSS for blue background and white text
-st.markdown("""
-<style>
-    /* Main background and text color */
-    .stApp {
-        background-color: #1E3A8A;
-        color: white;
-    }
-    
-    /* Style for headers */
-    h1, h2, h3, h4, h5, h6 {
-        color: white !important;
-    }
-    
-    /* Style for standard text */
-    p, div, span, label {
-        color: white !important;
-    }
-    
-    /* Style for warning, info and other message containers */
-    .stAlert > div {
-        color: white !important;
-        background-color: rgba(255, 255, 255, 0.1) !important;
-        border-color: rgba(255, 255, 255, 0.2) !important;
-    }
-    
-    /* Style for radio buttons text */
-    .stRadio label {
-        color: white !important;
-    }
-    
-    /* Style for button text */
-    .stButton button {
-        color: white !important;
-        background-color: #3B82F6 !important;
-        border-color: #60A5FA !important;
-    }
-    
-    /* Style for button hover */
-    .stButton button:hover {
-        background-color: #2563EB !important;
-    }
-    
-    /* Tables styling */
-    .dataframe {
-        color: white !important;
-    }
-    
-    .dataframe th {
-        background-color: #2563EB !important;
-        color: white !important;
-    }
-    
-    .dataframe td {
-        background-color: #3B82F6 !important;
-        color: white !important;
-    }
-    
-    /* Progress bar styling */
-    .stProgress > div > div {
-        background-color: #60A5FA !important;
-    }
-    
-    /* Fix for markdown text */
-    .css-1offfwp p {
-        color: white !important;
-    }
-    
-    /* Radio buttons styling */
-    .stRadio > div[role="radiogroup"] > label > div {
-        background-color: rgba(255, 255, 255, 0.1) !important;
-        border-color: rgba(255, 255, 255, 0.2) !important;
-    }
-</style>
-""", unsafe_allow_html=True)
-
-# Initialize session state variables with proper type hints for improved maintainability
+# Initialize session state variables if they don't exist
 if 'mode' not in st.session_state:
     st.session_state.mode = "timer_mode"  # Start with timer mode
 if 'current_question' not in st.session_state:
@@ -103,12 +28,11 @@ if 'current_timer_start_time' not in st.session_state:
 # Store selected option for current question in timer mode
 if 'timer_current_selection' not in st.session_state:
     st.session_state.timer_current_selection = None
-# For auto-update mechanism
-if 'last_update' not in st.session_state:
-    st.session_state.last_update = time.time()
-# Track if timer should be reset
-if 'reset_timer' not in st.session_state:
-    st.session_state.reset_timer = True
+# For automatic timer updates
+if 'last_update_time' not in st.session_state:
+    st.session_state.last_update_time = time.time()
+if 'timer_key' not in st.session_state:
+    st.session_state.timer_key = 0
 
 # Sample questions with multiple choice options
 questions = [
@@ -135,21 +59,21 @@ questions = [
 ]
 
 def switch_to_relaxed_mode():
-    """Switch from timer mode to relaxed mode."""
     st.session_state.mode = "relaxed_mode"
     st.session_state.current_question = 0
     st.session_state.timer_mode_completed = True
     st.session_state.question_start_time = datetime.now()
 
 def next_question():
-    """Move to the next question or switch modes if at the end."""
     if st.session_state.current_question < len(questions) - 1:
         st.session_state.current_question += 1
         if st.session_state.mode == "relaxed_mode":
             st.session_state.question_start_time = datetime.now()
         elif st.session_state.mode == "timer_mode":
-            # Mark timer for reset
-            st.session_state.reset_timer = True
+            # Reset timer for the new question
+            st.session_state.current_timer_start_time = time.time()
+            st.session_state.timer_current_selection = None
+            st.session_state.timer_key += 1  # Force timer component refresh
     else:
         if st.session_state.mode == "timer_mode":
             switch_to_relaxed_mode()
@@ -157,14 +81,12 @@ def next_question():
             st.session_state.mode = "completed"
 
 def previous_question():
-    """Move to the previous question (only in relaxed mode)."""
     if st.session_state.current_question > 0:
         st.session_state.current_question -= 1
         if st.session_state.mode == "relaxed_mode":
             st.session_state.question_start_time = datetime.now()
 
 def save_relaxed_answer(idx, selected_option):
-    """Save the answer for relaxed mode and update time tracking."""
     # Save the current answer and update time spent
     st.session_state.relaxed_answers[idx] = selected_option
     if st.session_state.question_start_time is not None:
@@ -175,22 +97,17 @@ def save_relaxed_answer(idx, selected_option):
         st.session_state.question_start_time = datetime.now()
 
 def on_answer_change(idx):
-    """Called when a radio button value changes in relaxed mode."""
-    key = f"relaxed_radio_{idx}"
-    if key in st.session_state:
-        selected = st.session_state[key]
-        if selected is not None:
-            save_relaxed_answer(idx, selected)
+    # This function is called when the radio button value changes
+    selected = st.session_state[f"relaxed_radio_{idx}"]
+    if selected is not None:
+        save_relaxed_answer(idx, selected)
 
 def timer_selection_change():
-    """Update the current selection without rerunning the page in timer mode."""
+    # Update the current selection without rerunning the page
     current_idx = st.session_state.current_question
-    key = f"timer_radio_{current_idx}"
-    if key in st.session_state:
-        st.session_state.timer_current_selection = st.session_state[key]
+    st.session_state.timer_current_selection = st.session_state[f"timer_radio_{current_idx}"]
 
 def display_results():
-    """Display the final results from both survey modes."""
     st.title("Survey Results")
     
     col1, col2 = st.columns(2)
@@ -200,9 +117,7 @@ def display_results():
         timer_results = {}
         for i, q in enumerate(questions):
             timer_results[f"Question {i+1}"] = st.session_state.timer_answers.get(i, "No answer")
-        
-        timer_df = pd.DataFrame(list(timer_results.items()), columns=["Question", "Your Answer"])
-        st.table(timer_df)
+        st.table(pd.DataFrame(timer_results.items(), columns=["Question", "Your Answer"]))
     
     with col2:
         st.subheader("Relaxed Mode Answers")
@@ -218,29 +133,9 @@ def display_results():
             "Time Spent": list(time_spent.values())
         })
         st.table(results_df)
-    
-    # Add a restart button
-    if st.button("Start Again", key="restart_button"):
-        # Reset all session state variables
-        for key in list(st.session_state.keys()):
-            del st.session_state[key]
-        st.rerun()
-
-def get_timer_progress():
-    """Calculate the current timer progress value (0-1)."""
-    if st.session_state.mode != "timer_mode":
-        return 0
-    
-    current_idx = st.session_state.current_question
-    time_limit = questions[current_idx]["time_limit"]
-    elapsed_time = time.time() - st.session_state.current_timer_start_time
-    remaining_time = max(0, time_limit - elapsed_time)
-    
-    # Return value between 0 and 1 representing remaining time
-    return remaining_time / time_limit
 
 def check_timer_expiration():
-    """Check if the timer for current question has expired."""
+    """Check if timer has expired and handle question transition"""
     if st.session_state.mode != "timer_mode":
         return False
     
@@ -248,38 +143,62 @@ def check_timer_expiration():
     time_limit = questions[current_idx]["time_limit"]
     elapsed_time = time.time() - st.session_state.current_timer_start_time
     
-    # If time's up, save answer and move to next question
     if elapsed_time >= time_limit:
-        # Save the answer (or "No answer" if none selected)
+        # Save answer (or "No answer" if none selected)
         st.session_state.timer_answers[current_idx] = (
             st.session_state.timer_current_selection if st.session_state.timer_current_selection else "No answer"
         )
         # Move to next question
         next_question()
-        return True
+        return True  # Timer expired
     
-    return False
+    return False  # Timer still running
+
+def get_timer_remaining_ratio():
+    """Calculate the remaining time ratio for the progress bar"""
+    current_idx = st.session_state.current_question
+    time_limit = questions[current_idx]["time_limit"]
+    elapsed_time = time.time() - st.session_state.current_timer_start_time
+    remaining_time = max(0, time_limit - elapsed_time)
+    return max(0, remaining_time / time_limit)
+
+class AutoRefreshTimer:
+    def __init__(self, interval=0.1):
+        """Initialize an auto-refresh mechanism for the timer
+        
+        Args:
+            interval: How often to check for updates (seconds)
+        """
+        self.interval = interval
+        self.running = False
+        self.thread = None
+    
+    def start(self):
+        """Start the auto-refresh mechanism"""
+        if not self.running:
+            self.running = True
+            self.thread = threading.Thread(target=self._refresh_loop)
+            self.thread.daemon = True
+            self.thread.start()
+    
+    def _refresh_loop(self):
+        """Main refresh loop that runs in background"""
+        while self.running:
+            # Check if we need to update based on time passing
+            current_time = time.time()
+            if current_time - st.session_state.last_update_time >= self.interval:
+                st.session_state.last_update_time = current_time
+                if check_timer_expiration():
+                    # Timer expired, force a rerun
+                    st.rerun()
+                time.sleep(self.interval)
+            else:
+                time.sleep(0.05)  # Small sleep to prevent CPU hogging
 
 def main():
-    """Main application function."""
-    # Only reset timer when necessary (new question)
-    if st.session_state.mode == "timer_mode" and st.session_state.reset_timer:
-        st.session_state.current_timer_start_time = time.time()
-        st.session_state.timer_current_selection = None
-        st.session_state.reset_timer = False
-    
-    # Setup automatic refresh mechanism
-    if st.session_state.mode == "timer_mode":
-        # Timeout every 200ms to refresh the timer
-        current_time = time.time()
-        if current_time - st.session_state.last_update > 0.2:
-            st.session_state.last_update = current_time
-            # Check timer expiration before scheduling rerun
-            if not check_timer_expiration():
-                # Use a placeholder to force a rerun
-                st.empty().markdown(f"<div id='timer-refresh'></div>", unsafe_allow_html=True)
-                # Schedule a rerun after a short delay
-                st.rerun()
+    # Create and start the auto-refresh timer
+    auto_refresher = AutoRefreshTimer(interval=0.2)
+    auto_refresher.start()
     
     st.title("Dual-Mode Survey Application")
     
@@ -312,49 +231,73 @@ def main():
         # Get time limit for current question
         time_limit = current_question["time_limit"]
         
-        # Calculate remaining time
+        # Create timer display showing seconds remaining
+        remaining_ratio = get_timer_remaining_ratio()
         elapsed_time = time.time() - st.session_state.current_timer_start_time
         remaining_time = max(0, time_limit - elapsed_time)
-        
-        # Calculate progress value (1.0 = full, 0.0 = empty)
-        progress_value = get_timer_progress()
         
         # Timer display with container to group elements
         timer_container = st.container()
         with timer_container:
             col1, col2 = st.columns([6, 1])
             with col1:
-                # Display progress bar with calculated value
-                st.progress(progress_value)
+                # Use a unique key based on the timer_key to force refresh
+                timer_bar = st.progress(remaining_ratio, key=f"timer_progress_{st.session_state.timer_key}")
             with col2:
                 st.markdown(f"**{remaining_time:.1f}s**")
         
-        # Radio button for answer selection
-        option_index = None
-        # Try to find the index for the current selection to maintain state
-        if st.session_state.timer_current_selection in current_question["options"]:
-            option_index = current_question["options"].index(st.session_state.timer_current_selection)
-        
-        selected_option = st.radio(
+        # Radio button for answer selection without triggering rerun
+        radio_placeholder = st.empty()
+        selected_option = radio_placeholder.radio(
             "Select your answer:",
             options=current_question["options"],
             key=f"timer_radio_{current_idx}",
-            index=option_index,
+            index=None,
             on_change=timer_selection_change
         )
         
+        # Use the stored selection for submission
+        current_selection = st.session_state.timer_current_selection
+        
         # Submit button
-        col1, col2, col3 = st.columns([1, 2, 1])
-        with col2:
-            submitted = st.button("Submit", key=f"timer_submit_{current_idx}", use_container_width=True)
+        submitted = st.button("Submit", key=f"timer_submit_{current_idx}")
         
         # If submitted, save answer and go to next question
         if submitted:
-            # Get the current selection from session state to avoid KeyError
-            current_selection = st.session_state.timer_current_selection
             st.session_state.timer_answers[current_idx] = current_selection if current_selection else "No answer"
             next_question()
             st.rerun()
+        
+        # Add an interval-based auto-refresh component
+        # This creates a smoother timer experience by updating every few milliseconds
+        st.markdown(
+            """
+            <script>
+                const timer = setInterval(() => {
+                    // Use requestAnimationFrame for smoother updates
+                    window.requestAnimationFrame(function() {
+                        const timers = window.parent.document.querySelectorAll('[data-testid="stProgress"]');
+                        if (timers.length > 0) {
+                            // Force a re-render of the timer bar
+                            for (const timer of timers) {
+                                timer.style.opacity = '0.99';
+                            }
+                        }
+                    });
+                }, 50);  // Update every 50ms for smooth animation
+                
+                // We'll use this approach to trigger a full refresh when needed
+                // but without interrupting the user interaction
+                function scheduleReload() {
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 1000);  // Reload every second for timer updates
+                }
+                scheduleReload();
+            </script>
+            """,
+            unsafe_allow_html=True
+        )
     
     # Handle relaxed mode
     elif st.session_state.mode == "relaxed_mode":
@@ -373,23 +316,22 @@ def main():
             "Select your answer:",
             options=current_question["options"],
             key=f"relaxed_radio_{current_idx}",
-            index=default_idx if default_value and default_value in current_question["options"] else None,
+            index=default_idx if default_value in current_question["options"] else None,
             on_change=lambda: on_answer_change(current_idx)
         )
         
         # Navigation buttons
-        col1, col2, col3 = st.columns([1, 1, 1])
+        col1, col2 = st.columns(2)
         
         with col1:
             if st.session_state.current_question > 0:
-                if st.button("Previous Question", use_container_width=True):
+                if st.button("Previous Question"):
                     # The current answer is already saved via the on_change callback
                     previous_question()
                     st.rerun()
         
-        with col3:
-            button_text = "Next Question" if current_idx < len(questions) - 1 else "Finish Survey"
-            if st.button(button_text, use_container_width=True):
+        with col2:
+            if st.button("Next Question" if current_idx < len(questions) - 1 else "Finish Survey"):
                 # The current answer is already saved via the on_change callback
                 next_question()
                 st.rerun()

@@ -82,60 +82,12 @@ def inject_css():
 # --- Constants ---
 TIMER_SECONDS = 10
 QUESTIONS = [
-    {
-        "type": "single",
-        "question": "What is the capital of France?",
-        "options": ["Berlin", "Madrid", "Paris", "Rome"],
-        "follow_up": {
-            "trigger_answer": "Paris",
-            "question": {
-                "type": "open",
-                "question": "What do you like most about Paris?"
-            }
-        }
-    },
-    {
-        "type": "single",
-        "question": "Which language is primarily spoken in Brazil?",
-        "options": ["Portuguese", "Spanish", "English", "French"]
-    },
-    {
-        "type": "single",
-        "question": "What is 5 + 7?",
-        "options": ["10", "11", "12", "13"]
-    },
-    {
-        "type": "multi",
-        "question": "Select the prime numbers:",
-        "options": ["2", "4", "5", "9", "11"]
-    },
-    {
-        "type": "open",
-        "question": "Briefly describe your ideal vacation."
-    }
+    {"question": "What is the capital of France?", "options": ["Berlin", "Madrid", "Paris", "Rome"]},
+    {"question": "Which language is primarily spoken in Brazil?", "options": ["Portuguese", "Spanish", "English", "French"]},
+    {"question": "What is 5 + 7?", "options": ["10", "11", "12", "13"]},
 ]
 
-def render_question(question, key_prefix):
-    q_type = question.get("type", "single")
-    key = f"{key_prefix}_{st.session_state.question_index}"
-
-    if q_type == "single":
-        return st.radio("Select an answer:", question["options"], key=key)
-    elif q_type == "multi":
-        return st.multiselect("Select all that apply:", question["options"], key=key)
-    elif q_type == "open":
-        return st.text_area("Your answer:", key=key)
-    else:
-        st.error("Unknown question type.")
-        return None
-
 # --- Session State Initialization ---
-if "dynamic_questions" not in st.session_state:
-    st.session_state.dynamic_questions = list(QUESTIONS)  # Clone the original list
-    for q in QUESTIONS:
-        if "follow_up" in q:
-            q["follow_up_inserted"] = False
-
 if "mode" not in st.session_state:
     st.session_state.mode = "timer"
 if "answers" not in st.session_state:
@@ -150,47 +102,20 @@ if "timer_expired" not in st.session_state:
     st.session_state.timer_expired = False
 
 
-def go_to_next_question(selected_answer=None):
-    q_idx = st.session_state.question_index
-    current_question = st.session_state.dynamic_questions[q_idx]
-
-    # Store the answer
-    mode = st.session_state.mode
-    if len(st.session_state.answers[mode]) > q_idx:
-        st.session_state.answers[mode][q_idx] = selected_answer
-    else:
-        st.session_state.answers[mode].append(selected_answer)
-
-    elapsed = time.time() - st.session_state.start_time if st.session_state.start_time else 0
-    if len(st.session_state.times[mode]) > q_idx:
-        st.session_state.times[mode][q_idx] = round(elapsed, 2)
-    else:
-        st.session_state.times[mode].append(round(elapsed, 2))
-
-    # Only add follow-up once
-    if current_question.get("follow_up") and not current_question.get("follow_up_inserted"):
-        if selected_answer == current_question["follow_up"]["trigger_answer"]:
-            st.session_state.dynamic_questions.insert(
-                q_idx + 1, current_question["follow_up"]["question"]
-            )
-            current_question["follow_up_inserted"] = True
-
-    # Proceed
+def go_to_next_question():
     st.session_state.question_index += 1
     st.session_state.start_time = None
     st.session_state.timer_expired = False
     st.rerun()
 
 
-
-
 def timer_mode():
     st.title("🕒 Survey - Timer Mode")
     q_idx = st.session_state.question_index
-    question = st.session_state.dynamic_questions[q_idx]
+    question = QUESTIONS[q_idx]
 
     st.markdown(f"**Question {q_idx + 1}:** {question['question']}")
-    selected = render_question(question, "timer")
+    selected = st.radio("Select an answer:", question["options"], key=f"timer_{q_idx}")
 
     if st.session_state.start_time is None:
         st.session_state.start_time = time.time()
@@ -199,18 +124,19 @@ def timer_mode():
     remaining = TIMER_SECONDS - elapsed
 
     if remaining > 0:
-        st.progress(remaining / TIMER_SECONDS)
+        progress = remaining / TIMER_SECONDS
+        st.progress(progress)
         st.caption(f"Time remaining: {int(remaining)}s")
         time.sleep(1)
         st.rerun()
     else:
         if not st.session_state.timer_expired:
             st.session_state.timer_expired = True
-            st.session_state.answers["timer"].append(selected)
+            st.session_state.answers["timer"].append(selected if selected else None)
             st.session_state.times["timer"].append(round(elapsed, 2))
 
-            if q_idx + 1 < len(st.session_state.dynamic_questions):
-                go_to_next_question(selected)
+            if q_idx + 1 < len(QUESTIONS):
+                go_to_next_question()
             else:
                 st.session_state.mode = "relaxed"
                 st.session_state.question_index = 0
@@ -221,13 +147,13 @@ def timer_mode():
 def relaxed_mode():
     st.title("😌 Survey - Relaxed Mode")
     q_idx = st.session_state.question_index
-    question = st.session_state.dynamic_questions[q_idx]
+    question = QUESTIONS[q_idx]
 
     st.markdown(f"**Question {q_idx + 1}:** {question['question']}")
     if st.session_state.start_time is None:
         st.session_state.start_time = time.time()
 
-    selected = render_question(question, "relaxed")
+    selected = st.radio("Select an answer:", question["options"], key=f"relaxed_{q_idx}")
 
     col1, col2 = st.columns([1, 1])
     if col1.button("⬅ Previous") and q_idx > 0:
@@ -245,11 +171,10 @@ def relaxed_mode():
             st.session_state.answers["relaxed"].append(selected)
             st.session_state.times["relaxed"].append(round(elapsed, 2))
 
-        if q_idx + 1 < len(st.session_state.dynamic_questions):
-            go_to_next_question(selected)
+        if q_idx + 1 < len(QUESTIONS):
+            go_to_next_question()
         else:
             show_results()
-
 
 
 def show_results():
