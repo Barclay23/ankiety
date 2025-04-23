@@ -120,12 +120,6 @@ class QuestionType:
     MULTIPLE_SELECT = "multiple_select"
     RATING = "rating"
     DROPDOWN = "dropdown"
-    # New question types
-    SLIDER_RANGE = "slider_range"
-    FILE_UPLOAD = "file_upload"
-    NUMBER_INPUT = "number_input"
-    DATE_INPUT = "date_input"
-    LIKERT_SCALE = "likert_scale"
 
 # Initialize session state variables
 def init_session_state():
@@ -161,14 +155,6 @@ def init_session_state():
     # For rating questions
     if 'timer_current_rating' not in st.session_state:
         st.session_state.timer_current_rating = None
-    if 'timer_current_slider_range' not in st.session_state:
-        st.session_state.timer_current_slider_range = None
-    if 'timer_current_number_input' not in st.session_state:
-        st.session_state.timer_current_number_input = None
-    if 'timer_current_date' not in st.session_state:
-        st.session_state.timer_current_date = None
-    if 'timer_current_likert' not in st.session_state:
-        st.session_state.timer_current_likert = None
 
 # Enhanced questions list with multiple types
 questions = [
@@ -212,44 +198,6 @@ questions = [
         "type": QuestionType.OPEN_ENDED,
         "question": "What improvements would you suggest for this survey application?",
         "time_limit": 25  # seconds
-    },
-    {
-        "type": QuestionType.SLIDER_RANGE,
-        "question": "What is your acceptable price range for a new smartphone?",
-        "min": 100,
-        "max": 2000,
-        "step": 50,
-        "time_limit": 15  # seconds
-    },
-    {
-        "type": QuestionType.NUMBER_INPUT,
-        "question": "How many hours do you spend on social media per day?",
-        "min": 0,
-        "max": 24,
-        "step": 0.5,
-        "time_limit": 10  # seconds
-    },
-    {
-        "type": QuestionType.DATE_INPUT,
-        "question": "When did you last upgrade your computer/laptop?",
-        "time_limit": 15  # seconds
-    },
-    {
-        "type": QuestionType.LIKERT_SCALE,
-        "question": "This survey was easy to complete.",
-        "options": ["Strongly Disagree", "Disagree", "Neutral", "Agree", "Strongly Agree"],
-        "time_limit": 12  # seconds
-    },
-    {
-        "type": QuestionType.MULTIPLE_CHOICE,
-        "question": "Which emerging technology do you think will have the biggest impact in the next 5 years?",
-        "options": ["Artificial Intelligence", "Quantum Computing", "Biotechnology", "Renewable Energy", "Space Technology"],
-        "time_limit": 15  # seconds
-    },
-    {
-        "type": QuestionType.OPEN_ENDED,
-        "question": "How has technology changed your daily life in the past year?",
-        "time_limit": 30  # seconds
     },
 ]
 
@@ -327,25 +275,6 @@ def update_timer_selection(question_type: str):
         key = f"timer_{question_type}_{current_idx}"
         if key in st.session_state:
             st.session_state.timer_current_rating = st.session_state[key]
-    elif question_type == QuestionType.SLIDER_RANGE:
-        key = f"timer_{question_type}_{current_idx}"
-        if key in st.session_state:
-            st.session_state.timer_current_slider_range = st.session_state[key]
-    
-    elif question_type == QuestionType.NUMBER_INPUT:
-        key = f"timer_{question_type}_{current_idx}"
-        if key in st.session_state:
-            st.session_state.timer_current_number_input = st.session_state[key]
-    
-    elif question_type == QuestionType.DATE_INPUT:
-        key = f"timer_{question_type}_{current_idx}"
-        if key in st.session_state:
-            st.session_state.timer_current_date = st.session_state[key]
-    
-    elif question_type == QuestionType.LIKERT_SCALE:
-        key = f"timer_{question_type}_{current_idx}"
-        if key in st.session_state:
-            st.session_state.timer_current_likert = st.session_state[key]
 
 def format_answer_for_display(question_type: str, answer: Any) -> str:
     """Format different answer types for display in results table"""
@@ -356,16 +285,6 @@ def format_answer_for_display(question_type: str, answer: Any) -> str:
         if isinstance(answer, list) and len(answer) > 0:
             return ", ".join(answer)
         return "None selected"
-    
-    if question_type == QuestionType.SLIDER_RANGE:
-        if isinstance(answer, (list, tuple)) and len(answer) == 2:
-            return f"${answer[0]} - ${answer[1]}"
-        return "No range selected"
-    
-    if question_type == QuestionType.DATE_INPUT:
-        if isinstance(answer, (datetime, str)):
-            return str(answer)
-        return "No date selected"
     
     return str(answer)
 
@@ -522,23 +441,6 @@ def check_timer_expiration():
             st.session_state.timer_answers[current_idx] = (
                 st.session_state.timer_current_rating if st.session_state.timer_current_rating is not None else "No answer"
             )
-        
-        elif question_type == QuestionType.SLIDER_RANGE:
-            st.session_state.timer_answers[current_idx] = (
-                st.session_state.timer_current_slider_range if st.session_state.timer_current_slider_range is not None else "No answer"
-            )
-        elif question_type == QuestionType.NUMBER_INPUT:
-            st.session_state.timer_answers[current_idx] = (
-                st.session_state.timer_current_number_input if st.session_state.timer_current_number_input is not None else "No answer"
-            )
-        elif question_type == QuestionType.DATE_INPUT:
-            st.session_state.timer_answers[current_idx] = (
-                st.session_state.timer_current_date if st.session_state.timer_current_date is not None else "No answer"
-            )
-        elif question_type == QuestionType.LIKERT_SCALE:
-            st.session_state.timer_answers[current_idx] = (
-                st.session_state.timer_current_likert if st.session_state.timer_current_likert is not None else "No answer"
-            )
             
         # Move to next question
         next_question()
@@ -609,67 +511,6 @@ def render_timer_question(current_idx: int, question: Dict[str, Any]):
             key=f"timer_{question_type}_{current_idx}",
             on_change=lambda: update_timer_selection(question_type)
         )
-    
-    elif question_type == QuestionType.SLIDER_RANGE:
-        # Range slider for price range
-        default_value = [question["min"], question["max"]] if st.session_state.timer_current_slider_range is None else st.session_state.timer_current_slider_range
-        st.slider(
-            "Select price range:",
-            min_value=question["min"],
-            max_value=question["max"],
-            value=default_value,
-            step=question.get("step", 1),
-            key=f"timer_{question_type}_{current_idx}",
-            on_change=lambda: update_timer_selection(question_type),
-            format="$%d"
-        )
-    
-    elif question_type == QuestionType.NUMBER_INPUT:
-        # Number input for numerical values
-        default_value = question["min"] if st.session_state.timer_current_number_input is None else st.session_state.timer_current_number_input
-        st.number_input(
-            "Enter value:",
-            min_value=question["min"],
-            max_value=question["max"],
-            value=default_value,
-            step=question.get("step", 1),
-            key=f"timer_{question_type}_{current_idx}",
-            on_change=lambda: update_timer_selection(question_type)
-        )
-    
-    elif question_type == QuestionType.DATE_INPUT:
-        # Date picker
-        today = datetime.now().date()
-        default_value = today if st.session_state.timer_current_date is None else st.session_state.timer_current_date
-        st.date_input(
-            "Select date:",
-            value=default_value,
-            key=f"timer_{question_type}_{current_idx}",
-            on_change=lambda: update_timer_selection(question_type)
-        )
-    
-    elif question_type == QuestionType.LIKERT_SCALE:
-        # Likert scale as radio buttons with horizontal layout
-        option_index = None
-        if st.session_state.timer_current_likert in question["options"]:
-            option_index = question["options"].index(st.session_state.timer_current_likert)
-        
-        st.write("Please rate your agreement:")
-        cols = st.columns(len(question["options"]))
-        
-        for i, option in enumerate(question["options"]):
-            with cols[i]:
-                st.write(option)
-                selected = st.radio(
-                    "",
-                    [""],
-                    key=f"timer_likert_option_{current_idx}_{i}",
-                    label_visibility="collapsed",
-                    index=0 if option_index == i else None
-                )
-                if selected:
-                    st.session_state[f"timer_{question_type}_{current_idx}"] = option
-                    update_timer_selection(question_type)
 
 def render_relaxed_question(current_idx: int, question: Dict[str, Any]):
     """Render the appropriate input for a relaxed mode question based on its type."""
@@ -748,82 +589,6 @@ def render_relaxed_question(current_idx: int, question: Dict[str, Any]):
             key=f"relaxed_{question_type}_{current_idx}",
             on_change=lambda: on_answer_change(current_idx, f"relaxed_{question_type}_{current_idx}")
         )
-    
-    elif question_type == QuestionType.SLIDER_RANGE:
-        # Default range values
-        if not isinstance(default_value, (list, tuple)) or len(default_value) != 2:
-            default_value = [question["min"], question["max"]]
-        
-        # Range slider for price range
-        st.slider(
-            "Select price range:",
-            min_value=question["min"],
-            max_value=question["max"],
-            value=default_value,
-            step=question.get("step", 1),
-            key=f"relaxed_{question_type}_{current_idx}",
-            on_change=lambda: on_answer_change(current_idx, f"relaxed_{question_type}_{current_idx}"),
-            format="$%d"
-        )
-    
-    elif question_type == QuestionType.NUMBER_INPUT:
-        # Default number value
-        if default_value == "No answer" or default_value is None:
-            default_value = question["min"]
-        
-        # Number input for numerical values
-        st.number_input(
-            "Enter value:",
-            min_value=question["min"],
-            max_value=question["max"],
-            value=default_value,
-            step=question.get("step", 1),
-            key=f"relaxed_{question_type}_{current_idx}",
-            on_change=lambda: on_answer_change(current_idx, f"relaxed_{question_type}_{current_idx}")
-        )
-    
-    elif question_type == QuestionType.DATE_INPUT:
-        # Default date
-        today = datetime.now().date()
-        if default_value == "No answer" or default_value is None:
-            default_value = today
-        elif isinstance(default_value, str):
-            try:
-                default_value = datetime.strptime(default_value, "%Y-%m-%d").date()
-            except:
-                default_value = today
-        
-        # Date picker
-        st.date_input(
-            "Select date:",
-            value=default_value,
-            key=f"relaxed_{question_type}_{current_idx}",
-            on_change=lambda: on_answer_change(current_idx, f"relaxed_{question_type}_{current_idx}")
-        )
-    
-    elif question_type == QuestionType.LIKERT_SCALE:
-        # Determine selected option index
-        option_index = None
-        if default_value in question["options"]:
-            option_index = question["options"].index(default_value)
-        
-        # Likert scale as horizontal radio buttons
-        st.write("Please rate your agreement:")
-        cols = st.columns(len(question["options"]))
-        
-        for i, option in enumerate(question["options"]):
-            with cols[i]:
-                st.write(option)
-                selected = st.radio(
-                    "",
-                    [""],
-                    key=f"relaxed_likert_option_{current_idx}_{i}",
-                    label_visibility="collapsed",
-                    index=0 if option_index == i else None
-                )
-                if selected:
-                    st.session_state[f"relaxed_{question_type}_{current_idx}"] = option
-                    on_answer_change(current_idx, f"relaxed_{question_type}_{current_idx}")
 
 def save_current_timer_answer(current_idx: int):
     """Save the current answer in timer mode based on the question type."""
@@ -846,23 +611,6 @@ def save_current_timer_answer(current_idx: int):
             st.session_state.timer_current_rating if st.session_state.timer_current_rating is not None else "No answer"
         )
 
-    elif question_type == QuestionType.SLIDER_RANGE:
-        st.session_state.timer_answers[current_idx] = (
-            st.session_state.timer_current_slider_range if st.session_state.timer_current_slider_range is not None else "No answer"
-        )
-    elif question_type == QuestionType.NUMBER_INPUT:
-        st.session_state.timer_answers[current_idx] = (
-            st.session_state.timer_current_number_input if st.session_state.timer_current_number_input is not None else "No answer"
-        )
-    elif question_type == QuestionType.DATE_INPUT:
-        st.session_state.timer_answers[current_idx] = (
-            st.session_state.timer_current_date if st.session_state.timer_current_date is not None else "No answer"
-        )
-    elif question_type == QuestionType.LIKERT_SCALE:
-        st.session_state.timer_answers[current_idx] = (
-            st.session_state.timer_current_likert if st.session_state.timer_current_likert is not None else "No answer"
-        )
-
 def main():
     """Main application function."""
     # Initialize session state
@@ -871,86 +619,6 @@ def main():
     # Reset timer when necessary (new question)
     if st.session_state.mode == "timer_mode" and st.session_state.reset_timer:
         st.session_state.current_timer_start_time = time.time()
-        st.session_state.reset_timer = False
-    
-    # Display the appropriate content based on the current mode
-    if st.session_state.mode == "timer_mode":
-        display_timer_mode()
-    elif st.session_state.mode == "relaxed_mode":
-        display_relaxed_mode()
-    elif st.session_state.mode == "completed":
-        display_results()
-    else:
-        st.error("Unknown application mode")
-
-def display_timer_mode():
-    """Display the timer mode interface."""
-    current_idx = st.session_state.current_question
-    
-    # Display progress information
-    st.markdown(f"### Timer Mode: Question {current_idx + 1} of {len(questions)}")
-    
-    # Display the timer progress bar
-    remaining_time = questions[current_idx]["time_limit"] - (time.time() - st.session_state.current_timer_start_time)
-    progress_value = get_timer_progress()
-    
-    # Display timer bar and remaining time
-    col1, col2 = st.columns([4, 1])
-    with col1:
-        st.progress(progress_value)
-    with col2:
-        st.write(f"{max(0, int(remaining_time))}s left")
-    
-    # Display the current question
-    st.markdown(f"## {questions[current_idx]['question']}")
-    
-    # Render the appropriate input for this question type
-    render_timer_question(current_idx, questions[current_idx])
-    
-    # Add a submit button
-    if st.button("Submit Answer", key="timer_submit"):
-        save_current_timer_answer(current_idx)
-        next_question()
-        st.rerun()
-    
-    # Check if timer expired and update UI if necessary
-    if check_timer_expiration():
-        st.rerun()
-
-def display_relaxed_mode():
-    """Display the relaxed mode interface."""
-    current_idx = st.session_state.current_question
-    
-    # Display progress information
-    st.markdown(f"### Relaxed Mode: Question {current_idx + 1} of {len(questions)}")
-    st.markdown("Take your time to answer each question.")
-    
-    # Display the current question
-    st.markdown(f"## {questions[current_idx]['question']}")
-    
-    # Render the appropriate input for this question type
-    render_relaxed_question(current_idx, questions[current_idx])
-    
-    # Navigation buttons
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        if current_idx > 0:
-            if st.button("Previous", key="relaxed_prev"):
-                previous_question()
-                st.rerun()
-    
-    with col2:
-        next_button_text = "Next" if current_idx < len(questions) - 1 else "Finish"
-        if st.button(next_button_text, key="relaxed_next"):
-            # Save the current answer before moving on
-            question_type = questions[current_idx]["type"]
-            key = f"relaxed_{question_type}_{current_idx}"
-            if key in st.session_state:
-                save_relaxed_answer(current_idx, st.session_state[key])
-            next_question()
-            st.rerun()
-
-# Add a call to the main function at the end of the script
-if __name__ == "__main__":
-    main()
+        st.session_state.timer_current_selection = None
+        st.session_state.timer_current_multi_selection = []
+        st.session_state.timer_current_text_input
