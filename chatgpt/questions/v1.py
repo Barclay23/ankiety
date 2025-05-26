@@ -21,58 +21,39 @@ def init_session():
         st.session_state.relaxed_start_times = [None] * len(QUESTIONS)
         st.session_state.relaxed_durations = [0] * len(QUESTIONS)
         st.session_state.timer_completed = False
-        # Clear previous timer start times
-        for i in range(len(QUESTIONS)):
-            st.session_state.pop(f"timer_start_{i}", None)
-
 
 
 def run_timer_mode():
     index = st.session_state.timer_index
     question = QUESTIONS[index]
 
-    # Initialize timer start time only once per question
-    if f"timer_start_{index}" not in st.session_state:
-        st.session_state[f"timer_start_{index}"] = time.time()
-
-    start_time = st.session_state[f"timer_start_{index}"]
-    elapsed = time.time() - start_time
-    remaining_time = max(0, TIMER_DURATION - int(elapsed))
-    percent = max(0, int((TIMER_DURATION - elapsed) / TIMER_DURATION * 100))
-
     st.subheader(f"Timer Mode - Question {index + 1} of {len(QUESTIONS)}")
     st.markdown("You must answer quickly. Time is running out!")
 
-    # Timer UI
-    label_placeholder = st.empty()
-    progress_bar = st.empty()
-    label_placeholder.markdown(f"⏳ Time left: **{remaining_time} seconds**")
-    progress_bar.progress(percent)
+    # Timer bar
+    placeholder = st.empty()
+    start_time = time.time()
+    elapsed = 0
+    selected = None
 
-    # Show question with radio buttons (can be interacted during timer)
-    selected = st.radio(
-        question["question"],
-        question["options"],
-        index=question["options"].index(st.session_state.answers_timer[index])
-        if st.session_state.answers_timer[index] else 0,
-        key=f"timer_q_{index}"
-    )
+    while elapsed < TIMER_DURATION:
+        elapsed = time.time() - start_time
+        percent = max(0, 100 - (elapsed / TIMER_DURATION) * 100)
+        placeholder.progress(int(percent), f"Time left: {TIMER_DURATION - int(elapsed)}s")
+        time.sleep(0.1)
+
+    # Final render and capture
+    selected = st.radio(question["question"], question["options"], key=f"timer_q_{index}")
     st.session_state.answers_timer[index] = selected
 
-    # Auto advance to next question after time expires
-    if elapsed >= TIMER_DURATION:
-        if index + 1 < len(QUESTIONS):
-            st.session_state.timer_index += 1
-        else:
-            st.session_state.mode = "relaxed"
-            st.session_state.timer_completed = True
-        st.rerun()
+    # Go to next question
+    if index + 1 < len(QUESTIONS):
+        st.session_state.timer_index += 1
+        st.experimental_rerun()
     else:
-        # Auto-refresh the page every second
-        time.sleep(1)
-        st.rerun()
-
-
+        st.session_state.mode = "relaxed"
+        st.session_state.timer_completed = True
+        st.experimental_rerun()
 
 
 def run_relaxed_mode():
@@ -94,18 +75,18 @@ def run_relaxed_mode():
         if st.button("Previous", disabled=(index == 0)):
             st.session_state.relaxed_durations[index] += time.time() - st.session_state.relaxed_start_times[index]
             st.session_state.relaxed_index -= 1
-            st.rerun()
+            st.experimental_rerun()
     with col2:
         if st.button("Next", disabled=(index == len(QUESTIONS) - 1)):
             st.session_state.relaxed_durations[index] += time.time() - st.session_state.relaxed_start_times[index]
             st.session_state.relaxed_index += 1
-            st.rerun()
+            st.experimental_rerun()
 
     if index == len(QUESTIONS) - 1:
         if st.button("Finish Survey"):
             st.session_state.relaxed_durations[index] += time.time() - st.session_state.relaxed_start_times[index]
             st.session_state.mode = "completed"
-            st.rerun()
+            st.experimental_rerun()
 
 
 def show_summary():
@@ -129,7 +110,7 @@ def main():
     if st.session_state.mode == "not_started":
         if st.button("Start Timer Mode"):
             st.session_state.mode = "timer"
-            st.rerun()
+            st.experimental_rerun()
         st.warning("You must complete Timer Mode first to unlock Relaxed Mode.")
 
     elif st.session_state.mode == "timer":

@@ -4,8 +4,6 @@ import datetime
 import pandas as pd
 import json
 import threading
-from streamlit.runtime.scriptrunner import add_script_run_ctx, get_script_run_ctx
-import asyncio
 
 # Set page configuration
 st.set_page_config(
@@ -13,6 +11,10 @@ st.set_page_config(
     page_icon="📝",
     layout="wide"
 )
+
+# Enable auto-refresh for timer
+if 'auto_refresh' not in st.session_state:
+    st.session_state.auto_refresh = True
 
 # Sample questions - replace with your own
 QUESTIONS = [
@@ -71,27 +73,20 @@ def initialize_session_state():
     
     if 'relaxed_start_time' not in st.session_state:
         st.session_state.relaxed_start_time = None
-    
-    # Add a session state variable to track if timer is running
-    if 'timer_running' not in st.session_state:
-        st.session_state.timer_running = False
-    
-    # Track actual time remaining for consistent display
-    if 'current_time_left' not in st.session_state:
-        st.session_state.current_time_left = TIME_LIMIT_PER_QUESTION
+        
+    if 'last_refresh_time' not in st.session_state:
+        st.session_state.last_refresh_time = time.time()
 
 def go_to_next_question():
     """Move to the next question in the sequence"""
     if st.session_state.current_question < len(QUESTIONS) - 1:
         st.session_state.current_question += 1
         st.session_state.time_started = time.time()
-        st.session_state.current_time_left = TIME_LIMIT_PER_QUESTION
     else:
         st.session_state.timer_completed = True
         st.session_state.mode = "relaxed"
         st.session_state.current_question = 0
         st.session_state.relaxed_start_time = time.time()
-        st.session_state.timer_running = False
 
 def record_timer_answer(answer, question_idx):
     """Record answer given in timer mode"""
@@ -113,7 +108,7 @@ def record_relaxed_answer(answer, question_idx):
 
 def display_timer_bar(time_left, total_time):
     """Display a shrinking timer bar"""
-    progress = max(0, min(time_left / total_time, 1.0))  # Ensure between 0 and 1
+    progress = time_left / total_time
     # Use a color that changes from green to red as time runs out
     color = f"rgb({int(255 * (1 - progress))}, {int(255 * progress)}, 0)"
     
@@ -135,7 +130,7 @@ def display_timer_bar(time_left, total_time):
             "></div>
         </div>
         <div style="text-align: center; font-weight: bold; margin-bottom: 20px;">
-            Time remaining: {max(0, int(time_left))} seconds
+            Time remaining: {int(time_left)} seconds
         </div>
         """,
         unsafe_allow_html=True
@@ -179,48 +174,18 @@ def save_results():
         mime="text/csv"
     )
 
-def update_timer():
-    """Function to update timer in a separate thread"""
-    # Calculate starting time remaining
-    time_elapsed = time.time() - st.session_state.time_started
-    time_left = max(0, TIME_LIMIT_PER_QUESTION - time_elapsed)
-    st.session_state.current_time_left = time_left
-    
-    # Continue until timer runs out or mode changes
-    while st.session_state.timer_running and st.session_state.mode == "timer" and time_left > 0:
-        # Update time remaining
-        time_elapsed = time.time() - st.session_state.time_started
-        time_left = max(0, TIME_LIMIT_PER_QUESTION - time_elapsed)
-        st.session_state.current_time_left = time_left
-        
-        # Rerun to update UI
-        try:
-            st.rerun()
-        except:
-            # Handle any rerun exceptions
-            pass
-        
-        # Short delay to avoid excessive CPU usage
-        time.sleep(0.1)
-    
-    # Time's up for this question
-    if st.session_state.mode == "timer" and st.session_state.timer_running:
-        go_to_next_question()
-        # If there are more questions, restart the timer
-        if st.session_state.mode == "timer":
-            st.session_state.timer_running = True
-            try:
-                st.rerun()
-            except:
-                pass
-
 def timer_mode():
     """Display the timer mode interface"""
     st.header("Timer Mode")
     st.subheader(f"Question {st.session_state.current_question + 1} of {len(QUESTIONS)}")
     
-    # Display timer bar with session state time left
-    display_timer_bar(st.session_state.current_time_left, TIME_LIMIT_PER_QUESTION)
+    # Calculate time elapsed and remaining
+    current_time = time.time()
+    time_elapsed = current_time - st.session_state.time_started
+    time_left = max(0, TIME_LIMIT_PER_QUESTION - time_elapsed)
+    
+    # Display timer bar
+    display_timer_bar(time_left, TIME_LIMIT_PER_QUESTION)
     
     # Display the current question
     question_data = QUESTIONS[st.session_state.current_question]
@@ -240,19 +205,19 @@ def timer_mode():
         if answer:
             record_timer_answer(answer, st.session_state.current_question)
     
-    # Start timer thread if not already running
-    if not st.session_state.timer_running:
-        st.session_state.timer_running = True
-        # Start the timer thread
-        thread = threading.Thread(target=update_timer)
-        thread.daemon = True
-        thread.start()
+    # Check if time is up
+    if time_left <= 0:
+        go_to_next_question()
+        st.rerun()
+    elif st.session_state.auto_refresh:
+        # Only refresh if it's been at least 0.1 seconds since the last refresh
+        if time.time() - st.session_state.last_refresh_time >= 0.1:
+            st.session_state.last_refresh_time = time.time()
+            time.sleep(0.01)  # Short delay to avoid excessive CPU usage
+            st.rerun()
 
 def relaxed_mode():
     """Display the relaxed mode interface"""
-    # Stop the timer if it was running
-    st.session_state.timer_running = False
-    
     st.header("Relaxed Mode")
     st.info("Take your time to answer each question. You can navigate between questions freely.")
     
@@ -319,9 +284,6 @@ def relaxed_mode():
 
 def complete_screen():
     """Display the survey completion screen"""
-    # Ensure timer is stopped
-    st.session_state.timer_running = False
-    
     st.header("Survey Completed!")
     st.success("Thank you for completing both parts of the survey.")
     
@@ -342,6 +304,17 @@ def main():
     
     # Display app title
     st.title("Two-Mode Survey Application")
+    
+    # Add hidden element with auto-refresh for timer mode
+    if st.session_state.mode == "timer" and st.session_state.auto_refresh:
+        st.markdown(
+            """
+            <iframe src="data:text/html;charset=utf-8,%3Chtml%3E%3Cbody%3E%3Cscript%3Efunction refresh() %7B parent.window.location.reload(); setTimeout(refresh%2C 100); %7D setTimeout(refresh%2C 100)%3B%3C/script%3E%3C/body%3E%3C/html%3E" 
+            width="0" height="0" style="display:none;">
+            </iframe>
+            """,
+            unsafe_allow_html=True
+        )
     
     # Display instructions based on current mode
     if st.session_state.mode == "timer":
