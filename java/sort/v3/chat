@@ -1,0 +1,127 @@
+/**
+ * Main.java
+ *
+ * A high-performance, general-purpose hybrid sorting algorithm (Timsort-inspired)
+ * implemented in pure Java 21. This algorithm is stable, adaptive, and efficient
+ * on real-world data. It combines Merge Sort with Insertion Sort for small runs.
+ *
+ * Usage:
+ *   javac Main.java
+ *   java Main
+ *
+ * Author: [Your Name]
+ * Since: 2025-10-18
+ */
+
+import java.util.*;
+
+public class Main {
+
+    private static final int RUN = 32; // Size threshold for insertion sort
+
+    /**
+     * Insertion sort: Efficient for small data segments.
+     */
+    private static <T extends Comparable<? super T>> void insertionSort(T[] arr, int left, int right) {
+        for (int i = left + 1; i <= right; i++) {
+            T temp = arr[i];
+            int j = i - 1;
+            while (j >= left && arr[j].compareTo(temp) > 0) {
+                arr[j + 1] = arr[j];
+                j--;
+            }
+            arr[j + 1] = temp;
+        }
+    }
+
+    /**
+     * Merges two sorted subarrays of arr[].
+     */
+    private static <T extends Comparable<? super T>> void merge(T[] arr, int l, int m, int r) {
+        int len1 = m - l + 1;
+        int len2 = r - m;
+
+        @SuppressWarnings("unchecked")
+        T[] left = (T[]) new Comparable[len1];
+        @SuppressWarnings("unchecked")
+        T[] right = (T[]) new Comparable[len2];
+
+        System.arraycopy(arr, l, left, 0, len1);
+        System.arraycopy(arr, m + 1, right, 0, len2);
+
+        int i = 0, j = 0, k = l;
+
+        while (i < len1 && j < len2) {
+            if (left[i].compareTo(right[j]) <= 0) {
+                arr[k++] = left[i++];
+            } else {
+                arr[k++] = right[j++];
+            }
+        }
+
+        while (i < len1) arr[k++] = left[i++];
+        while (j < len2) arr[k++] = right[j++];
+    }
+
+    /**
+     * Hybrid sort (Timsort-inspired).
+     */
+    public static <T extends Comparable<? super T>> void hybridSort(T[] arr) {
+        int n = arr.length;
+
+        // Step 1: Sort small blocks using insertion sort
+        for (int i = 0; i < n; i += RUN) {
+            insertionSort(arr, i, Math.min((i + RUN - 1), (n - 1)));
+        }
+
+        // Step 2: Merge sorted runs using merge sort doubling step
+        for (int size = RUN; size < n; size = 2 * size) {
+            for (int left = 0; left < n; left += 2 * size) {
+                int mid = left + size - 1;
+                int right = Math.min((left + 2 * size - 1), (n - 1));
+
+                if (mid < right) {
+                    merge(arr, left, mid, right);
+                }
+            }
+        }
+    }
+
+    /**
+     * Benchmark and demonstration.
+     */
+    public static void main(String[] args) {
+        int n = 100_000;
+        Random random = new Random();
+        Integer[] data = new Integer[n];
+
+        for (int i = 0; i < n; i++) {
+            data[i] = random.nextInt(n);
+        }
+
+        System.out.println("Sorting " + n + " random integers...");
+        long start = System.nanoTime();
+
+        hybridSort(data);
+
+        long duration = System.nanoTime() - start;
+        System.out.printf("Completed in %.3f ms%n", duration / 1_000_000.0);
+
+        // Verify correctness
+        if (isSorted(data)) {
+            System.out.println("✅ Array is sorted correctly.");
+        } else {
+            System.out.println("❌ Sorting failed.");
+        }
+    }
+
+    /**
+     * Utility method to verify sorting correctness.
+     */
+    private static <T extends Comparable<? super T>> boolean isSorted(T[] arr) {
+        for (int i = 1; i < arr.length; i++) {
+            if (arr[i - 1].compareTo(arr[i]) > 0) return false;
+        }
+        return true;
+    }
+}

@@ -1,0 +1,92 @@
+import java.util.Random;
+import java.util.Arrays;
+
+public class Main {
+
+    public static void main(String[] args) {
+        int[] numbers = new Random().ints(70, -1000, 1000).toArray();
+
+        System.out.println("Unsorted array:");
+        System.out.println(Arrays.toString(numbers));
+
+        dualPivotQuickSort(numbers, 0, numbers.length - 1);
+
+        System.out.println("\nSorted array:");
+        System.out.println(Arrays.toString(numbers));
+    }
+
+    /**
+     * Optimized Dual-Pivot Quicksort implementation for int arrays.
+     * Average complexity: O(n log n)
+     * Worst case (rare): O(n^2)
+     */
+    public static void dualPivotQuickSort(int[] arr, int left, int right) {
+        if (left >= right) return;
+
+        // Use insertion sort for small partitions (faster than recursion for n < 27)
+        if (right - left < 27) {
+            insertionSort(arr, left, right);
+            return;
+        }
+
+        // Choose two pivots
+        int third = (right - left) / 3;
+        int m1 = left + third;
+        int m2 = right - third;
+
+        if (arr[m1] < arr[m2]) {
+            swap(arr, left, m1);
+            swap(arr, right, m2);
+        } else {
+            swap(arr, left, m2);
+            swap(arr, right, m1);
+        }
+
+        int pivot1 = arr[left];
+        int pivot2 = arr[right];
+
+        // Partitioning
+        int i = left + 1;
+        int lt = left + 1;
+        int gt = right - 1;
+
+        while (i <= gt) {
+            if (arr[i] < pivot1) {
+                swap(arr, i++, lt++);
+            } else if (arr[i] > pivot2) {
+                swap(arr, i, gt--);
+            } else {
+                i++;
+            }
+        }
+
+        // Place pivots in correct locations
+        swap(arr, left, --lt);
+        swap(arr, right, ++gt);
+
+        // Recursively sort three partitions
+        dualPivotQuickSort(arr, left, lt - 1);
+        dualPivotQuickSort(arr, lt + 1, gt - 1);
+        dualPivotQuickSort(arr, gt + 1, right);
+    }
+
+    /** Standard insertion sort for small subarrays (used by quicksort cutoff). */
+    private static void insertionSort(int[] arr, int left, int right) {
+        for (int i = left + 1; i <= right; i++) {
+            int key = arr[i];
+            int j = i - 1;
+            while (j >= left && arr[j] > key) {
+                arr[j + 1] = arr[j];
+                j--;
+            }
+            arr[j + 1] = key;
+        }
+    }
+
+    /** Swap utility. */
+    private static void swap(int[] arr, int i, int j) {
+        int tmp = arr[i];
+        arr[i] = arr[j];
+        arr[j] = tmp;
+    }
+}

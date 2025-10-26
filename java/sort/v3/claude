@@ -1,0 +1,94 @@
+public class Main {
+    
+    /**
+     * Optimized sort for small integer arrays using Insertion Sort.
+     * For small arrays (< 100 elements), Insertion Sort outperforms
+     * more complex algorithms due to low overhead and cache efficiency.
+     * 
+     * Time Complexity: O(n²) worst case, O(n) best case
+     * Space Complexity: O(1)
+     * 
+     * @param arr array to sort in-place
+     */
+    public static void sort(int[] arr) {
+        if (arr == null || arr.length <= 1) {
+            return;
+        }
+        
+        for (int i = 1; i < arr.length; i++) {
+            int key = arr[i];
+            int j = i - 1;
+            
+            // Shift elements greater than key to the right
+            while (j >= 0 && arr[j] > key) {
+                arr[j + 1] = arr[j];
+                j--;
+            }
+            arr[j + 1] = key;
+        }
+    }
+    
+    /**
+     * Alternative: Returns a new sorted array without modifying the original
+     * 
+     * @param arr original array
+     * @return new sorted array
+     */
+    public static int[] sortCopy(int[] arr) {
+        if (arr == null) {
+            return null;
+        }
+        
+        int[] copy = arr.clone();
+        sort(copy);
+        return copy;
+    }
+    
+    public static void main(String[] args) {
+        // Test cases
+        int[] arr1 = {64, 34, 25, 12, 22, 11, 90};
+        int[] arr2 = {5, 2, 8, 1, 9};
+        int[] arr3 = {1};
+        int[] arr4 = {};
+        int[] arr5 = {3, 3, 1, 2, 1};
+        
+        System.out.println("Original arrays:");
+        printArray("arr1", arr1);
+        printArray("arr2", arr2);
+        printArray("arr3", arr3);
+        printArray("arr4", arr4);
+        printArray("arr5", arr5);
+        
+        // Sort in-place
+        sort(arr1);
+        sort(arr2);
+        sort(arr3);
+        sort(arr4);
+        sort(arr5);
+        
+        System.out.println("\nSorted arrays:");
+        printArray("arr1", arr1);
+        printArray("arr2", arr2);
+        printArray("arr3", arr3);
+        printArray("arr4", arr4);
+        printArray("arr5", arr5);
+        
+        // Demonstrate sortCopy
+        int[] original = {9, 7, 5, 3, 1};
+        int[] sorted = sortCopy(original);
+        System.out.println("\nUsing sortCopy:");
+        printArray("original", original);
+        printArray("sorted", sorted);
+    }
+    
+    private static void printArray(String name, int[] arr) {
+        System.out.print(name + ": [");
+        for (int i = 0; i < arr.length; i++) {
+            System.out.print(arr[i]);
+            if (i < arr.length - 1) {
+                System.out.print(", ");
+            }
+        }
+        System.out.println("]");
+    }
+}

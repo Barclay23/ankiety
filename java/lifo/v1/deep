@@ -1,0 +1,130 @@
+import java.util.ArrayList;
+import java.util.EmptyStackException;
+import java.util.List;
+
+// LIFO Queue implementation using ArrayList
+class LifoQueue<T> {
+    private List<T> elements;
+    
+    public LifoQueue() {
+        elements = new ArrayList<>();
+    }
+    
+    // Add element to the top of the queue
+    public void push(T element) {
+        elements.add(element);
+    }
+    
+    // Remove and return the top element
+    public T pop() {
+        if (isEmpty()) {
+            throw new EmptyStackException();
+        }
+        return elements.remove(elements.size() - 1);
+    }
+    
+    // Return the top element without removing it
+    public T peek() {
+        if (isEmpty()) {
+            throw new EmptyStackException();
+        }
+        return elements.get(elements.size() - 1);
+    }
+    
+    // Check if the queue is empty
+    public boolean isEmpty() {
+        return elements.isEmpty();
+    }
+    
+    // Get the size of the queue
+    public int size() {
+        return elements.size();
+    }
+    
+    // Clear all elements from the queue
+    public void clear() {
+        elements.clear();
+    }
+    
+    @Override
+    public String toString() {
+        return elements.toString();
+    }
+}
+
+// Main class to test the LIFO queue
+public class Main {
+    public static void main(String[] args) {
+        // Create a LIFO queue for integers
+        LifoQueue<Integer> lifoQueue = new LifoQueue<>();
+        
+        System.out.println("=== Testing Integer LIFO Queue ===");
+        
+        // Test pushing elements
+        System.out.println("\n1. Pushing elements:");
+        lifoQueue.push(10);
+        System.out.println("Pushed: 10, Queue: " + lifoQueue);
+        
+        lifoQueue.push(20);
+        System.out.println("Pushed: 20, Queue: " + lifoQueue);
+        
+        lifoQueue.push(30);
+        System.out.println("Pushed: 30, Queue: " + lifoQueue);
+        
+        // Test peeking
+        System.out.println("\n2. Peeking at top element:");
+        System.out.println("Top element: " + lifoQueue.peek());
+        System.out.println("Queue remains: " + lifoQueue);
+        
+        // Test popping elements
+        System.out.println("\n3. Popping elements (LIFO order):");
+        while (!lifoQueue.isEmpty()) {
+            System.out.println("Popped: " + lifoQueue.pop() + ", Remaining: " + lifoQueue);
+        }
+        
+        // Test with strings
+        System.out.println("\n=== Testing String LIFO Queue ===");
+        LifoQueue<String> stringQueue = new LifoQueue<>();
+        
+        stringQueue.push("Apple");
+        stringQueue.push("Banana");
+        stringQueue.push("Cherry");
+        
+        System.out.println("String queue: " + stringQueue);
+        System.out.println("Popping: " + stringQueue.pop());
+        System.out.println("Popping: " + stringQueue.pop());
+        System.out.println("Remaining: " + stringQueue);
+        
+        // Test error handling
+        System.out.println("\n=== Testing Error Handling ===");
+        LifoQueue<Double> emptyQueue = new LifoQueue<>();
+        
+        try {
+            emptyQueue.pop();
+        } catch (EmptyStackException e) {
+            System.out.println("Caught expected exception: Cannot pop from empty queue");
+        }
+        
+        try {
+            emptyQueue.peek();
+        } catch (EmptyStackException e) {
+            System.out.println("Caught expected exception: Cannot peek empty queue");
+        }
+        
+        // Additional operations
+        System.out.println("\n=== Testing Additional Operations ===");
+        LifoQueue<Character> charQueue = new LifoQueue<>();
+        
+        charQueue.push('A');
+        charQueue.push('B');
+        charQueue.push('C');
+        
+        System.out.println("Queue size: " + charQueue.size());
+        System.out.println("Is empty: " + charQueue.isEmpty());
+        System.out.println("Queue: " + charQueue);
+        
+        charQueue.clear();
+        System.out.println("After clear - Is empty: " + charQueue.isEmpty());
+        System.out.println("Queue: " + charQueue);
+    }
+}

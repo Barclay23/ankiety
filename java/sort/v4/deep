@@ -1,0 +1,180 @@
+import java.util.Arrays;
+import java.util.Random;
+
+public class Main {
+    
+    /**
+     * Optimized dual-pivot quicksort implementation for integer arrays
+     * This is based on Java's own sorting algorithm but optimized for small arrays
+     */
+    public static void optimizedSort(int[] arr) {
+        if (arr == null || arr.length <= 1) {
+            return;
+        }
+        dualPivotQuicksort(arr, 0, arr.length - 1);
+    }
+    
+    private static void dualPivotQuicksort(int[] arr, int left, int right) {
+        // Use insertion sort for small subarrays (optimization for small sizes)
+        if (right - left < 27) {
+            insertionSort(arr, left, right);
+            return;
+        }
+        
+        // Choose pivots and partition
+        if (arr[left] > arr[right]) {
+            swap(arr, left, right);
+        }
+        
+        int pivot1 = arr[left];
+        int pivot2 = arr[right];
+        
+        int less = left + 1;
+        int great = right - 1;
+        int k = less;
+        
+        while (k <= great) {
+            if (arr[k] < pivot1) {
+                swap(arr, k, less++);
+            } else if (arr[k] > pivot2) {
+                while (k < great && arr[great] > pivot2) {
+                    great--;
+                }
+                swap(arr, k, great--);
+                
+                if (arr[k] < pivot1) {
+                    swap(arr, k, less++);
+                }
+            }
+            k++;
+        }
+        
+        // Swap pivots to final positions
+        swap(arr, left, less - 1);
+        swap(arr, right, great + 1);
+        
+        // Recursively sort partitions
+        dualPivotQuicksort(arr, left, less - 2);
+        dualPivotQuicksort(arr, less, great);
+        dualPivotQuicksort(arr, great + 2, right);
+    }
+    
+    /**
+     * Insertion sort for small arrays or nearly sorted data
+     * Very efficient for small datasets
+     */
+    private static void insertionSort(int[] arr, int left, int right) {
+        for (int i = left + 1; i <= right; i++) {
+            int key = arr[i];
+            int j = i - 1;
+            
+            while (j >= left && arr[j] > key) {
+                arr[j + 1] = arr[j];
+                j--;
+            }
+            arr[j + 1] = key;
+        }
+    }
+    
+    private static void swap(int[] arr, int i, int j) {
+        int temp = arr[i];
+        arr[i] = arr[j];
+        arr[j] = temp;
+    }
+    
+    /**
+     * Alternative: Highly optimized counting sort for integer-only data
+     * Extremely fast when value range is limited
+     */
+    public static void countingSort(int[] arr) {
+        if (arr == null || arr.length == 0) return;
+        
+        int min = arr[0];
+        int max = arr[0];
+        
+        // Find min and max values
+        for (int value : arr) {
+            if (value < min) min = value;
+            if (value > max) max = value;
+        }
+        
+        // If range is too large, fall back to dual-pivot quicksort
+        if (max - min > 1000) {
+            optimizedSort(arr);
+            return;
+        }
+        
+        int range = max - min + 1;
+        int[] count = new int[range];
+        
+        // Count occurrences
+        for (int value : arr) {
+            count[value - min]++;
+        }
+        
+        // Reconstruct sorted array
+        int index = 0;
+        for (int i = 0; i < range; i++) {
+            while (count[i]-- > 0) {
+                arr[index++] = i + min;
+            }
+        }
+    }
+    
+    // Utility method to generate random array
+    public static int[] generateRandomArray(int size, int minValue, int maxValue) {
+        Random random = new Random();
+        int[] arr = new int[size];
+        for (int i = 0; i < size; i++) {
+            arr[i] = random.nextInt(maxValue - minValue + 1) + minValue;
+        }
+        return arr;
+    }
+    
+    // Utility method to check if array is sorted
+    public static boolean isSorted(int[] arr) {
+        for (int i = 1; i < arr.length; i++) {
+            if (arr[i] < arr[i - 1]) {
+                return false;
+            }
+        }
+        return true;
+    }
+    
+    public static void main(String[] args) {
+        // Generate array of 70 random integers between 0 and 1000
+        int[] numbers = generateRandomArray(70, 0, 1000);
+        int[] numbersCopy1 = numbers.clone();
+        int[] numbersCopy2 = numbers.clone();
+        
+        System.out.println("Original array (first 20 elements):");
+        System.out.println(Arrays.toString(Arrays.copyOf(numbers, Math.min(20, numbers.length))));
+        
+        // Test optimized dual-pivot quicksort
+        long startTime = System.nanoTime();
+        optimizedSort(numbers);
+        long endTime = System.nanoTime();
+        System.out.println("\nOptimized dual-pivot quicksort:");
+        System.out.println("Sorted: " + isSorted(numbers));
+        System.out.println("Time: " + (endTime - startTime) + " ns");
+        System.out.println("First 20 elements: " + Arrays.toString(Arrays.copyOf(numbers, Math.min(20, numbers.length))));
+        
+        // Test counting sort
+        startTime = System.nanoTime();
+        countingSort(numbersCopy1);
+        endTime = System.nanoTime();
+        System.out.println("\nCounting sort:");
+        System.out.println("Sorted: " + isSorted(numbersCopy1));
+        System.out.println("Time: " + (endTime - startTime) + " ns");
+        System.out.println("First 20 elements: " + Arrays.toString(Arrays.copyOf(numbersCopy1, Math.min(20, numbersCopy1.length))));
+        
+        // Test Java's built-in sort for comparison
+        startTime = System.nanoTime();
+        Arrays.sort(numbersCopy2);
+        endTime = System.nanoTime();
+        System.out.println("\nJava's Arrays.sort():");
+        System.out.println("Sorted: " + isSorted(numbersCopy2));
+        System.out.println("Time: " + (endTime - startTime) + " ns");
+        System.out.println("First 20 elements: " + Arrays.toString(Arrays.copyOf(numbersCopy2, Math.min(20, numbersCopy2.length))));
+    }
+}

@@ -1,0 +1,120 @@
+public class OptimalSort {
+
+    /**
+     * Dual-Pivot Quicksort - O(n log n) average case
+     * Used by Java's Arrays.sort() for primitive types
+     */
+    public static void sort(int[] arr) {
+        if (arr == null || arr.length < 2) return;
+        dualPivotQuicksort(arr, 0, arr.length - 1);
+    }
+
+    private static void dualPivotQuicksort(int[] arr, int left, int right) {
+        if (right - left < 27) {
+            insertionSort(arr, left, right);
+            return;
+        }
+
+        // Choose pivots
+        if (arr[left] > arr[right]) {
+            swap(arr, left, right);
+        }
+
+        int p1 = arr[left];
+        int p2 = arr[right];
+
+        int l = left + 1;
+        int g = right - 1;
+        int k = l;
+
+        while (k <= g) {
+            if (arr[k] < p1) {
+                swap(arr, k, l);
+                l++;
+            } else if (arr[k] >= p2) {
+                while (arr[g] > p2 && k < g) {
+                    g--;
+                }
+                swap(arr, k, g);
+                g--;
+
+                if (arr[k] < p1) {
+                    swap(arr, k, l);
+                    l++;
+                }
+            }
+            k++;
+        }
+
+        l--;
+        g++;
+
+        swap(arr, left, l);
+        swap(arr, right, g);
+
+        // Recursively sort partitions
+        dualPivotQuicksort(arr, left, l - 1);
+        dualPivotQuicksort(arr, l + 1, g - 1);
+        dualPivotQuicksort(arr, g + 1, right);
+    }
+
+    // For small arrays, insertion sort is faster
+    private static void insertionSort(int[] arr, int left, int right) {
+        for (int i = left + 1; i <= right; i++) {
+            int key = arr[i];
+            int j = i - 1;
+            while (j >= left && arr[j] > key) {
+                arr[j + 1] = arr[j];
+                j--;
+            }
+            arr[j + 1] = key;
+        }
+    }
+
+    private static void swap(int[] arr, int i, int j) {
+        int temp = arr[i];
+        arr[i] = arr[j];
+        arr[j] = temp;
+    }
+
+    // Test the sorting algorithm
+    public static void main(String[] args) {
+        int[] arr = {64, 34, 25, 12, 22, 11, 90, 88, 45, 50, 23, 36, 18, 77};
+
+        System.out.println("Original array:");
+        printArray(arr);
+
+        sort(arr);
+
+        System.out.println("\nSorted array:");
+        printArray(arr);
+
+        // Test with larger random array
+        int[] largeArr = new int[1000];
+        for (int i = 0; i < largeArr.length; i++) {
+            largeArr[i] = (int)(Math.random() * 10000);
+        }
+
+        long start = System.nanoTime();
+        sort(largeArr);
+        long end = System.nanoTime();
+
+        System.out.println("\nSorted 1000 random integers in " +
+                (end - start) / 1000000.0 + " ms");
+        System.out.println("Array is sorted: " + isSorted(largeArr));
+    }
+
+    private static void printArray(int[] arr) {
+        for (int i = 0; i < Math.min(arr.length, 20); i++) {
+            System.out.print(arr[i] + " ");
+        }
+        if (arr.length > 20) System.out.print("...");
+    }
+
+    private static boolean isSorted(int[] arr) {
+        for (int i = 1; i < arr.length; i++) {
+            if (arr[i] < arr[i - 1]) return false;
+        }
+        return true;
+    }
+}
