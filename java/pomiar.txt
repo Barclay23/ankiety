@@ -2,3 +2,7 @@ long startTime = System.nanoTime();
 
 long endTime = System.nanoTime();
 System.out.println("Czas: " + (endTime - startTime) / 1_000_000.0 + " ms");
+
+52,39 chat
+64,95 deep
+47,04 claude

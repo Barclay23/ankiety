@@ -1,88 +1,271 @@
-public class Main {
+import java.util.Arrays;
+import java.util.NoSuchElementException;
+
+/**
+ * Main.java
+ *
+ * High-performance LIFO queue (stack) for primitive ints.
+ * Prepared for usage patterns of ~10_000_000 elements or ~100_000 elements.
+ *
+ * Java: 21
+ * IntelliJ IDEA Community Edition 2025.2.3
+ */
+public final class Main {
+
+    // Useful presets for the user's stated workloads
+    public static final int LARGE_CAP = 10_000_000;
+    public static final int SMALL_CAP = 100_000;
 
     public static void main(String[] args) {
         long startTime = System.nanoTime();
-        LifoQueue queue = new LifoQueue(5);
+        // Quick demonstration & micro-benchmarks
+        System.out.println("IntLifoQueue demo & micro-benchmark");
+        System.out.println("-----------------------------------");
 
-        // Demo
-        queue.push(10);
-        queue.push(20);
-        queue.push(30);
-        System.out.println(queue.pop()); // 30
-        System.out.println(queue.pop()); // 20
-        queue.push(40);
-        queue.push(50);
-        queue.push(60);
-        queue.push(70); // This will be rejected (full)
-        queue.printState();
+        // Recommended usage: preallocate when you know expected max size
+        IntLifoQueue large = new IntLifoQueue(LARGE_CAP);
+        IntLifoQueue small = new IntLifoQueue(SMALL_CAP);
+
+        // Warmup a little for JIT (quick, not a full harness)
+        benchmarkPushPop(small, SMALL_CAP, 3);
+        benchmarkPushPop(large, 1_000_000, 2); // smaller sample to warm up JIT
+
+        System.out.println();
+        System.out.println("Measured performance (push then pop all) — best of several runs:");
+        long tSmall = benchmarkPushPop(small, SMALL_CAP, 5);
+        long tLarge = benchmarkPushPop(large, LARGE_CAP, 3);
+
+        System.out.printf("Small (%d elements): %.3f s%n", SMALL_CAP, tSmall / 1_000_000_000.0);
+        System.out.printf("Large (%d elements): %.3f s%n", LARGE_CAP, tLarge / 1_000_000_000.0);
+
+        // Example of bulk operations
+        System.out.println();
+        System.out.println("Example: bulk push/pop to/from array");
+        int[] buffer = new int[SMALL_CAP];
+        for (int i = 0; i < buffer.length; i++) buffer[i] = i;
+        // push all
+        small.clear();
+        small.pushAll(buffer, 0, buffer.length);
+        // pop 10 elements into an array
+        int[] out = new int[10];
+        small.popInto(out, 0, 10);
+        System.out.println("Popped top 10 values: " + Arrays.toString(out));
         long endTime = System.nanoTime();
         System.out.println("Czas: " + (endTime - startTime) / 1_000_000.0 + " ms");
     }
-}
 
-/**
- * Ultra-fast bounded LIFO queue for primitive ints.
- * Non-thread-safe, constant-time operations.
- */
-final class LifoQueue {
+    /**
+     * Micro-benchmark: push N integers, then pop N integers.
+     * Returns elapsed nanoseconds.
+     */
+    private static long benchmarkPushPop(IntLifoQueue q, int n, int runs) {
+        long best = Long.MAX_VALUE;
+        // Use local arrays to avoid repeated allocations in loops
+        int[] tmp = new int[n];
+        for (int i = 0; i < n; i++) tmp[i] = i;
 
-    private final int[] elements;
-    private int top = -1;
-    private final int capacity;
-
-    public LifoQueue(int capacity) {
-        if (capacity <= 0)
-            throw new IllegalArgumentException("Capacity must be positive");
-        this.capacity = capacity;
-        this.elements = new int[capacity];
-    }
-
-    /** Pushes a value onto the stack if not full. */
-    public boolean push(int value) {
-        if (top + 1 >= capacity) {
-            // Queue is full
-            return false;
+        for (int r = 0; r < runs; r++) {
+            q.clear();
+            long t0 = System.nanoTime();
+            // push all (use bulk where possible)
+            q.pushAll(tmp, 0, n);
+            // pop all
+            for (int i = 0; i < n; i++) q.pop();
+            long t1 = System.nanoTime();
+            long elapsed = t1 - t0;
+            if (elapsed < best) best = elapsed;
         }
-        elements[++top] = value;
-        return true;
+        return best;
     }
 
-    /** Pops the last pushed value, or throws if empty. */
-    public int pop() {
-        if (top < 0)
-            throw new IllegalStateException("Queue is empty");
-        return elements[top--];
-    }
+    /**
+     * High-performance LIFO queue for ints.
+     * Minimal, non-synchronized, allocation-friendly.
+     */
+    public static final class IntLifoQueue {
+        private static final int DEFAULT_INITIAL_CAP = 16;
 
-    /** Peeks the last pushed value without removing it. */
-    public int peek() {
-        if (top < 0)
-            throw new IllegalStateException("Queue is empty");
-        return elements[top];
-    }
+        /** internal array */
+        private int[] elements;
+        /** index of next push (size == top) */
+        private int top;
 
-    /** Returns current size. */
-    public int size() {
-        return top + 1;
-    }
-
-    /** Checks if the queue is empty. */
-    public boolean isEmpty() {
-        return top < 0;
-    }
-
-    /** Checks if the queue is full. */
-    public boolean isFull() {
-        return top + 1 == capacity;
-    }
-
-    /** Prints internal state (for debug). */
-    public void printState() {
-        System.out.print("LifoQueue [");
-        for (int i = 0; i <= top; i++) {
-            System.out.print(elements[i]);
-            if (i < top) System.out.print(", ");
+        /**
+         * Create with default capacity.
+         */
+        public IntLifoQueue() {
+            this(DEFAULT_INITIAL_CAP);
         }
-        System.out.println("]");
+
+        /**
+         * Create with given initial capacity (recommended to avoid resizing).
+         * @param initialCapacity capacity >= 0
+         */
+        public IntLifoQueue(int initialCapacity) {
+            if (initialCapacity < 0) throw new IllegalArgumentException("Negative capacity");
+            this.elements = (initialCapacity == 0) ? new int[DEFAULT_INITIAL_CAP] : new int[initialCapacity];
+            this.top = 0;
+        }
+
+        /**
+         * Create and reserve exact capacity for large usage.
+         */
+        public static IntLifoQueue forLarge() {
+            return new IntLifoQueue(LARGE_CAP);
+        }
+
+        /**
+         * Create and reserve capacity for small usage.
+         */
+        public static IntLifoQueue forSmall() {
+            return new IntLifoQueue(SMALL_CAP);
+        }
+
+        /**
+         * Push an int onto the LIFO queue.
+         * Extremely hot; keep implementation minimal to aid inlining.
+         */
+        public final void push(int value) {
+            if (top == elements.length) grow();
+            elements[top++] = value;
+        }
+
+        /**
+         * Push multiple ints from src[offset ... offset+len-1].
+         * Uses System.arraycopy when possible to speed up bulk inserts.
+         */
+        public final void pushAll(int[] src, int offset, int len) {
+            if (len <= 0) return;
+            ensureCapacity(top + len);
+            System.arraycopy(src, offset, elements, top, len);
+            top += len;
+        }
+
+        /**
+         * Pop the top element. Throws NoSuchElementException if empty.
+         */
+        public final int pop() {
+            if (top == 0) throw new NoSuchElementException("pop from empty IntLifoQueue");
+            // pre-decrement top, then read
+            int val = elements[--top];
+            // optional: help GC for reference arrays; not needed for int[]
+            return val;
+        }
+
+        /**
+         * Pop up to len elements and write into dst[offset .. offset+len-1].
+         * The first popped element (most recently pushed) will be written at dst[offset].
+         * Example: if stack top elements are [ .. , 97, 98, 99 ] (99 is top),
+         * popInto(dst, 0, 3) -> dst[0]=99, dst[1]=98, dst[2]=97
+         *
+         * This method performs a single arraycopy where possible by calculating
+         * the source window in the internal array — which is fast.
+         *
+         * Returns actual number of elements popped (may be less if queue had fewer elements).
+         */
+        public final int popInto(int[] dst, int offset, int len) {
+            if (len <= 0) return 0;
+            int available = top;
+            if (available == 0) return 0;
+            int toPop = Math.min(len, available);
+            int srcPos = top - toPop; // inclusive index of earliest element to copy
+            // We want to copy in reverse order so that dst[0] is the most recent (top-1).
+            // Easiest approach: copy block [srcPos .. top-1] into dst[offset .. offset+toPop-1],
+            // then reverse in place. Reversing small arrays is cheap; for huge copies it still beats repeated pop().
+            System.arraycopy(elements, srcPos, dst, offset, toPop);
+            // reverse block in dst to make top be first
+            int s = offset, e = offset + toPop - 1;
+            while (s < e) {
+                int t = dst[s];
+                dst[s] = dst[e];
+                dst[e] = t;
+                s++; e--;
+            }
+            top -= toPop;
+            return toPop;
+        }
+
+        /**
+         * Peek at the top element without removing. Throws if empty.
+         */
+        public final int peek() {
+            if (top == 0) throw new NoSuchElementException("peek from empty IntLifoQueue");
+            return elements[top - 1];
+        }
+
+        /**
+         * Try to pop; returns true if element popped and written into out[0].
+         * Very small, allocation-free alternative to exceptions.
+         */
+        public final boolean tryPop(int[] out) {
+            if (top == 0) return false;
+            out[0] = elements[--top];
+            return true;
+        }
+
+        /**
+         * Returns current number of elements.
+         */
+        public final int size() {
+            return top;
+        }
+
+        /**
+         * True if empty.
+         */
+        public final boolean isEmpty() {
+            return top == 0;
+        }
+
+        /**
+         * Clear (fast). Does not shrink the internal buffer.
+         */
+        public final void clear() {
+            top = 0;
+        }
+
+        /**
+         * Ensure capacity for at least minCapacity elements.
+         */
+        private final void ensureCapacity(int minCapacity) {
+            if (minCapacity > elements.length) {
+                grow(minCapacity);
+            }
+        }
+
+        /**
+         * Grow internal buffer — doubling strategy.
+         * Called when top == elements.length (no space).
+         */
+        private final void grow() {
+            int oldCap = elements.length;
+            int newCap = oldCap << 1; // double
+            if (newCap < 0) { // overflow protection
+                newCap = Integer.MAX_VALUE;
+            }
+            if (newCap < oldCap + 1) newCap = oldCap + 1;
+            elements = Arrays.copyOf(elements, newCap);
+        }
+
+        /**
+         * Grow internal buffer to at least minCapacity.
+         */
+        private final void grow(int minCapacity) {
+            int oldCap = elements.length;
+            int newCap = oldCap << 1;
+            if (newCap < minCapacity) {
+                // allocate exactly enough (or slightly more) if doubling isn't enough
+                newCap = minCapacity;
+            }
+            if (newCap < 0) newCap = Integer.MAX_VALUE;
+            elements = Arrays.copyOf(elements, newCap);
+        }
+
+        /**
+         * Optional: return a copy of internal array trimmed to size (for diagnostics).
+         */
+        public final int[] toArray() {
+            return Arrays.copyOf(elements, top);
+        }
     }
 }

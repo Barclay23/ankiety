@@ -1,69 +1,55 @@
-import java.util.LinkedList;
-
-class LIFOQueue<T> {
-    private LinkedList<T> queue;
-
-    public LIFOQueue() {
-        queue = new LinkedList<>();
-    }
-
-    public void enqueue(T item) {
-        queue.addFirst(item);
-    }
-
-    public T dequeue() {
-        if (isEmpty()) {
-            throw new IllegalStateException("Queue is empty");
-        }
-        return queue.removeFirst();
-    }
-
-    public T peek() {
-        if (isEmpty()) {
-            throw new IllegalStateException("Queue is empty");
-        }
-        return queue.getFirst();
-    }
-
-    public boolean isEmpty() {
-        return queue.isEmpty();
-    }
-
-    public int size() {
-        return queue.size();
-    }
-
-    @Override
-    public String toString() {
-        return queue.toString();
-    }
-}
-
 public class Main {
+
     public static void main(String[] args) {
         long startTime = System.nanoTime();
-
-        LIFOQueue<Integer> lifoQueue = new LIFOQueue<>();
-
-        System.out.println("Enqueueing elements: 1, 2, 3, 4, 5");
-        lifoQueue.enqueue(1);
-        lifoQueue.enqueue(2);
-        lifoQueue.enqueue(3);
-        lifoQueue.enqueue(4);
-        lifoQueue.enqueue(5);
-
-        System.out.println("Queue contents: " + lifoQueue);
-        System.out.println("Size: " + lifoQueue.size());
-
-        System.out.println("\nPeek (without removing): " + lifoQueue.peek());
-
-        System.out.println("\nDequeuing elements:");
-        while (!lifoQueue.isEmpty()) {
-            System.out.println("Dequeued: " + lifoQueue.dequeue());
+        // Example usage for 100K elements
+        IntLifoQueue smallQueue = new IntLifoQueue(100_000);
+        for (int i = 0; i < 100_000; i++) {
+            smallQueue.push(i);
+        }
+        for (int i = 0; i < 100_000; i++) {
+            smallQueue.pop();
         }
 
-        System.out.println("\nQueue is now empty: " + lifoQueue.isEmpty());
+        // Example usage for 10M elements
+        IntLifoQueue largeQueue = new IntLifoQueue(10_000_000);
+        for (int i = 0; i < 10_000_000; i++) {
+            largeQueue.push(i);
+        }
+        for (int i = 0; i < 10_000_000; i++) {
+            largeQueue.pop();
+        }
+
+        System.out.println("LIFO queue operations completed successfully");
         long endTime = System.nanoTime();
         System.out.println("Czas: " + (endTime - startTime) / 1_000_000.0 + " ms");
+    }
+
+    static class IntLifoQueue {
+        private int[] data;
+        private int top;
+
+        public IntLifoQueue(int initialCapacity) {
+            this.data = new int[initialCapacity];
+            this.top = -1;
+        }
+
+        public void push(int value) {
+            if (top == data.length - 1) {
+                resize();
+            }
+            data[++top] = value;
+        }
+
+        public int pop() {
+            return data[top--];
+        }
+
+        private void resize() {
+            int newCapacity = data.length + (data.length >> 1);
+            int[] newData = new int[newCapacity];
+            System.arraycopy(data, 0, newData, 0, data.length);
+            data = newData;
+        }
     }
 }

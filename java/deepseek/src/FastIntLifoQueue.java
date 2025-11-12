@@ -1,0 +1,162 @@
+import java.util.ArrayDeque;
+import java.util.Arrays;
+
+/**
+ * High-performance LIFO queue implementation optimized for integers
+ * Designed for both 10M and 100K element scenarios
+ */
+public class FastIntLifoQueue {
+    private int[] elements;
+    private int size;
+    private int capacity;
+
+    // Constants for different optimization profiles
+    private static final int INITIAL_CAPACITY_SMALL = 1 << 17; // 131,072 - optimized for 100K
+    private static final int INITIAL_CAPACITY_LARGE = 1 << 24; // 16,777,216 - optimized for 10M
+
+    /**
+     * Creates a LIFO queue optimized for the expected element count
+     * @param expectedMaxSize expected maximum number of elements (helps with initial capacity)
+     */
+    public FastIntLifoQueue(int expectedMaxSize) {
+        this.capacity = calculateOptimalCapacity(expectedMaxSize);
+        this.elements = new int[capacity];
+        this.size = 0;
+    }
+
+    /**
+     * Creates a LIFO queue with default optimization
+     */
+    public FastIntLifoQueue() {
+        this(INITIAL_CAPACITY_SMALL); // Default to smaller optimization
+    }
+
+    private int calculateOptimalCapacity(int expectedMaxSize) {
+        if (expectedMaxSize > 5_000_000) {
+            // For 10M elements, start with large capacity to minimize resizing
+            return INITIAL_CAPACITY_LARGE;
+        } else {
+            // For 100K elements, use smaller initial capacity
+            return Math.max(INITIAL_CAPACITY_SMALL, expectedMaxSize + (expectedMaxSize >> 2)); // +25%
+        }
+    }
+
+    /**
+     * Pushes an element onto the stack - O(1) amortized
+     * @param element the integer to push
+     */
+    public void push(int element) {
+        if (size == capacity) {
+            grow();
+        }
+        elements[size++] = element;
+    }
+
+    /**
+     * Pushes multiple elements in batch - more efficient for bulk operations
+     * @param values array of integers to push
+     */
+    public void pushAll(int[] values) {
+        if (size + values.length > capacity) {
+            grow(size + values.length);
+        }
+        System.arraycopy(values, 0, elements, size, values.length);
+        size += values.length;
+    }
+
+    /**
+     * Removes and returns the top element - O(1)
+     * @return the top element
+     * @throws IllegalStateException if stack is empty
+     */
+    public int pop() {
+        if (size == 0) {
+            throw new IllegalStateException("Stack is empty");
+        }
+        return elements[--size];
+    }
+
+    /**
+     * Returns the top element without removing it - O(1)
+     * @return the top element
+     * @throws IllegalStateException if stack is empty
+     */
+    public int peek() {
+        if (size == 0) {
+            throw new IllegalStateException("Stack is empty");
+        }
+        return elements[size - 1];
+    }
+
+    /**
+     * Checks if the stack is empty - O(1)
+     * @return true if empty, false otherwise
+     */
+    public boolean isEmpty() {
+        return size == 0;
+    }
+
+    /**
+     * Returns the number of elements - O(1)
+     * @return current size
+     */
+    public int size() {
+        return size;
+    }
+
+    /**
+     * Clears the stack without resizing the underlying array - O(1)
+     */
+    public void clear() {
+        size = 0;
+    }
+
+    /**
+     * Trims the capacity to the current size to minimize memory usage
+     */
+    public void trimToSize() {
+        if (size < capacity) {
+            elements = Arrays.copyOf(elements, size);
+            capacity = size;
+        }
+    }
+
+    /**
+     * Optimized growth strategy: double until 1M, then grow by 50%
+     */
+    private void grow() {
+        int newCapacity = capacity < 1_000_000 ? capacity << 1 : capacity + (capacity >> 1);
+        grow(newCapacity);
+    }
+
+    private void grow(int minCapacity) {
+        int newCapacity = Math.max(minCapacity, capacity < 1_000_000 ? capacity << 1 : capacity + (capacity >> 1));
+        elements = Arrays.copyOf(elements, newCapacity);
+        capacity = newCapacity;
+    }
+
+    /**
+     * Returns the current capacity (useful for debugging and monitoring)
+     * @return current capacity
+     */
+    public int capacity() {
+        return capacity;
+    }
+
+    /**
+     * Bulk pop operation - pops multiple elements at once
+     * @param count number of elements to pop
+     * @return array of popped elements
+     */
+    public int[] popMultiple(int count) {
+        if (count > size) {
+            throw new IllegalStateException("Not enough elements in stack");
+        }
+
+        int[] result = new int[count];
+        for (int i = 0; i < count; i++) {
+            result[count - 1 - i] = pop(); // Maintain LIFO order in result
+        }
+        return result;
+    }
+}

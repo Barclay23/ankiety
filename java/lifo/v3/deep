@@ -1,230 +1,73 @@
-import java.util.Arrays;
-import java.util.Comparator;
 import java.util.Random;
+import java.util.concurrent.TimeUnit;
 
-/**
- * Optimal Sorting Algorithms Collection for Java
- * Includes adaptive implementations with performance optimizations
- */
-public class OptimalSorter {
-
-    // Dual-Pivot Quicksort (Java's default - highly optimized)
-    public static <T extends Comparable<? super T>> void dualPivotQuickSort(T[] array) {
-        if (array == null || array.length <= 1) return;
-        dualPivotQuickSort(array, 0, array.length - 1);
+public class Main {
+    private static final Random RANDOM = new Random();
+    
+    public static void main(String[] args) {
+        System.out.println("FastIntLifoQueue Performance Test");
+        System.out.println("=================================");
+        
+        // Test with 100K elements
+        testWithSize(100_000, "100K elements");
+        
+        // Test with 10M elements  
+        testWithSize(10_000_000, "10M elements");
+        
+        // Test bulk operations
+        testBulkOperations();
     }
-
-    private static <T extends Comparable<? super T>> void dualPivotQuickSort(T[] array, int left, int right) {
-        // Use insertion sort for small subarrays
-        if (right - left < 27) {
-            insertionSort(array, left, right);
-            return;
-        }
-
-        // Choose pivots and partition
-        if (array[left].compareTo(array[right]) > 0) {
-            swap(array, left, right);
-        }
-
-        T pivot1 = array[left];
-        T pivot2 = array[right];
+    
+    private static void testWithSize(int size, String description) {
+        System.out.println("\nTesting with " + description + ":");
         
-        int less = left + 1;
-        int great = right - 1;
-        int k = less;
-
-        while (k <= great) {
-            if (array[k].compareTo(pivot1) < 0) {
-                swap(array, k, less++);
-            } else if (array[k].compareTo(pivot2) > 0) {
-                while (k < great && array[great].compareTo(pivot2) > 0) {
-                    great--;
-                }
-                swap(array, k, great--);
-                
-                if (array[k].compareTo(pivot1) < 0) {
-                    swap(array, k, less++);
-                }
-            }
-            k++;
-        }
-
-        // Swap pivots to final positions
-        swap(array, left, less - 1);
-        swap(array, right, great + 1);
-
-        // Recursively sort partitions
-        dualPivotQuickSort(array, left, less - 2);
-        if (pivot1.compareTo(pivot2) < 0) {
-            dualPivotQuickSort(array, less, great);
-        }
-        dualPivotQuickSort(array, great + 2, right);
-    }
-
-    // Timsort-inspired merge sort (optimal for real-world data)
-    public static <T extends Comparable<? super T>> void timSort(T[] array) {
-        if (array == null || array.length <= 1) return;
+        FastIntLifoQueue stack = new FastIntLifoQueue(size);
         
-        int n = array.length;
-        int minRun = calculateMinRun(n);
-        
-        // Sort individual subarrays of size minRun
-        for (int i = 0; i < n; i += minRun) {
-            int end = Math.min(i + minRun - 1, n - 1);
-            insertionSort(array, i, end);
-        }
-        
-        // Merge the sorted runs
-        for (int size = minRun; size < n; size = 2 * size) {
-            for (int left = 0; left < n; left += 2 * size) {
-                int mid = left + size - 1;
-                int right = Math.min(left + 2 * size - 1, n - 1);
-                
-                if (mid < right) {
-                    merge(array, left, mid, right);
-                }
-            }
-        }
-    }
-
-    // Adaptive insertion sort (optimal for small or nearly sorted arrays)
-    public static <T extends Comparable<? super T>> void insertionSort(T[] array) {
-        if (array == null || array.length <= 1) return;
-        insertionSort(array, 0, array.length - 1);
-    }
-
-    private static <T extends Comparable<? super T>> void insertionSort(T[] array, int left, int right) {
-        for (int i = left + 1; i <= right; i++) {
-            T key = array[i];
-            int j = i - 1;
-            
-            // Move elements that are greater than key one position ahead
-            while (j >= left && array[j].compareTo(key) > 0) {
-                array[j + 1] = array[j];
-                j--;
-            }
-            array[j + 1] = key;
-        }
-    }
-
-    // Heap sort (guaranteed O(n log n), good for worst-case scenarios)
-    public static <T extends Comparable<? super T>> void heapSort(T[] array) {
-        if (array == null || array.length <= 1) return;
-        
-        int n = array.length;
-        
-        // Build max heap
-        for (int i = n / 2 - 1; i >= 0; i--) {
-            heapify(array, n, i);
-        }
-        
-        // Extract elements from heap one by one
-        for (int i = n - 1; i > 0; i--) {
-            swap(array, 0, i);
-            heapify(array, i, 0);
-        }
-    }
-
-    private static <T extends Comparable<? super T>> void heapify(T[] array, int n, int i) {
-        int largest = i;
-        int left = 2 * i + 1;
-        int right = 2 * i + 2;
-        
-        if (left < n && array[left].compareTo(array[largest]) > 0) {
-            largest = left;
-        }
-        
-        if (right < n && array[right].compareTo(array[largest]) > 0) {
-            largest = right;
-        }
-        
-        if (largest != i) {
-            swap(array, i, largest);
-            heapify(array, n, largest);
-        }
-    }
-
-    // Utility methods
-    private static <T> void swap(T[] array, int i, int j) {
-        T temp = array[i];
-        array[i] = array[j];
-        array[j] = temp;
-    }
-
-    private static void merge(Comparable[] array, int left, int mid, int right) {
-        Comparable[] leftArray = Arrays.copyOfRange(array, left, mid + 1);
-        Comparable[] rightArray = Arrays.copyOfRange(array, mid + 1, right + 1);
-        
-        int i = 0, j = 0, k = left;
-        
-        while (i < leftArray.length && j < rightArray.length) {
-            if (leftArray[i].compareTo(rightArray[j]) <= 0) {
-                array[k++] = leftArray[i++];
-            } else {
-                array[k++] = rightArray[j++];
-            }
-        }
-        
-        while (i < leftArray.length) {
-            array[k++] = leftArray[i++];
-        }
-        
-        while (j < rightArray.length) {
-            array[k++] = rightArray[j++];
-        }
-    }
-
-    private static int calculateMinRun(int n) {
-        int r = 0;
-        while (n >= 64) {
-            r |= (n & 1);
-            n >>= 1;
-        }
-        return n + r;
-    }
-
-    // Generic version with Comparator
-    public static <T> void sortWithComparator(T[] array, Comparator<? super T> comparator) {
-        if (array == null || array.length <= 1) return;
-        Arrays.sort(array, comparator);
-    }
-
-    // Performance benchmark utility
-    public static <T extends Comparable<? super T>> void benchmarkSort(T[] originalArray, String algorithmName) {
-        T[] array = Arrays.copyOf(originalArray, originalArray.length);
+        // Test push performance
         long startTime = System.nanoTime();
-        
-        switch (algorithmName.toLowerCase()) {
-            case "quicksort":
-                dualPivotQuickSort(array);
-                break;
-            case "timsort":
-                timSort(array);
-                break;
-            case "heapsort":
-                heapSort(array);
-                break;
-            case "insertionsort":
-                insertionSort(array);
-                break;
-            default:
-                Arrays.sort(array);
+        for (int i = 0; i < size; i++) {
+            stack.push(RANDOM.nextInt());
         }
+        long pushTime = System.nanoTime() - startTime;
         
-        long endTime = System.nanoTime();
-        double duration = (endTime - startTime) / 1_000_000.0;
+        // Test pop performance
+        startTime = System.nanoTime();
+        for (int i = 0; i < size; i++) {
+            stack.pop();
+        }
+        long popTime = System.nanoTime() - startTime;
         
-        System.out.printf("%s: %.3f ms | Sorted: %s%n", 
-            algorithmName, duration, isSorted(array) ? "Yes" : "No");
+        System.out.printf("Push time: %,d ms%n", TimeUnit.NANOSECONDS.toMillis(pushTime));
+        System.out.printf("Pop time:  %,d ms%n", TimeUnit.NANOSECONDS.toMillis(popTime));
+        System.out.printf("Initial capacity: %,d%n", stack.capacity());
     }
-
-    private static <T extends Comparable<? super T>> boolean isSorted(T[] array) {
-        for (int i = 0; i < array.length - 1; i++) {
-            if (array[i].compareTo(array[i + 1]) > 0) {
-                return false;
-            }
+    
+    private static void testBulkOperations() {
+        System.out.println("\nTesting Bulk Operations:");
+        
+        FastIntLifoQueue stack = new FastIntLifoQueue(100_000);
+        int[] bulkData = new int[50_000];
+        for (int i = 0; i < bulkData.length; i++) {
+            bulkData[i] = RANDOM.nextInt();
         }
-        return true;
+        
+        // Single push timing
+        long startTime = System.nanoTime();
+        for (int value : bulkData) {
+            stack.push(value);
+        }
+        long singlePushTime = System.nanoTime() - startTime;
+        
+        stack.clear();
+        
+        // Bulk push timing
+        startTime = System.nanoTime();
+        stack.pushAll(bulkData);
+        long bulkPushTime = System.nanoTime() - startTime;
+        
+        System.out.printf("Single push time: %,d ms%n", TimeUnit.NANOSECONDS.toMillis(singlePushTime));
+        System.out.printf("Bulk push time:   %,d ms%n", TimeUnit.NANOSECONDS.toMillis(bulkPushTime));
+        System.out.printf("Bulk operations %.1fx faster%n", (double)singlePushTime / bulkPushTime);
     }
 }
 
@@ -232,136 +75,201 @@ public class OptimalSorter {
 
 
 
-import java.util.Arrays;
-import java.util.Random;
 
-public class Main {
-    public static void main(String[] args) {
-        // Test with different array sizes and types
-        System.out.println("=== Sorting Algorithm Performance Comparison ===\n");
-        
-        // Small array (insertion sort optimal)
-        Integer[] smallArray = generateRandomArray(50);
-        testAlgorithms(smallArray, "Small Array (50 elements)");
-        
-        // Medium array
-        Integer[] mediumArray = generateRandomArray(1000);
-        testAlgorithms(mediumArray, "Medium Array (1,000 elements)");
-        
-        // Large array
-        Integer[] largeArray = generateRandomArray(10000);
-        testAlgorithms(largeArray, "Large Array (10,000 elements)");
-        
-        // Nearly sorted array (Timsort optimal)
-        Integer[] nearlySortedArray = generateNearlySortedArray(1000);
-        testAlgorithms(nearlySortedArray, "Nearly Sorted Array (1,000 elements)");
-        
-        // Demonstration with custom objects
-        System.out.println("\n=== Custom Object Sorting ===");
-        sortCustomObjects();
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+import java.util.ArrayDeque;
+import java.util.Arrays;
+
+/**
+ * High-performance LIFO queue implementation optimized for integers
+ * Designed for both 10M and 100K element scenarios
+ */
+public class FastIntLifoQueue {
+    private int[] elements;
+    private int size;
+    private int capacity;
+    
+    // Constants for different optimization profiles
+    private static final int INITIAL_CAPACITY_SMALL = 1 << 17; // 131,072 - optimized for 100K
+    private static final int INITIAL_CAPACITY_LARGE = 1 << 24; // 16,777,216 - optimized for 10M
+    
+    /**
+     * Creates a LIFO queue optimized for the expected element count
+     * @param expectedMaxSize expected maximum number of elements (helps with initial capacity)
+     */
+    public FastIntLifoQueue(int expectedMaxSize) {
+        this.capacity = calculateOptimalCapacity(expectedMaxSize);
+        this.elements = new int[capacity];
+        this.size = 0;
     }
     
-    private static void testAlgorithms(Integer[] originalArray, String description) {
-        System.out.println(description);
-        System.out.println("-".repeat(description.length()));
-        
-        OptimalSorter.benchmarkSort(originalArray, "QuickSort");
-        OptimalSorter.benchmarkSort(originalArray, "TimSort");
-        OptimalSorter.benchmarkSort(originalArray, "HeapSort");
-        
-        // Only use insertion sort for small arrays
-        if (originalArray.length <= 100) {
-            OptimalSorter.benchmarkSort(originalArray, "InsertionSort");
-        }
-        
-        // Java's built-in (Dual-Pivot QuickSort)
-        Integer[] builtInArray = Arrays.copyOf(originalArray, originalArray.length);
-        long start = System.nanoTime();
-        Arrays.sort(builtInArray);
-        long end = System.nanoTime();
-        System.out.printf("Arrays.sort(): %.3f ms | Sorted: %s%n", 
-            (end - start) / 1_000_000.0, 
-            OptimalSorter.isSorted(builtInArray) ? "Yes" : "No");
-        
-        System.out.println();
+    /**
+     * Creates a LIFO queue with default optimization
+     */
+    public FastIntLifoQueue() {
+        this(INITIAL_CAPACITY_SMALL); // Default to smaller optimization
     }
     
-    private static Integer[] generateRandomArray(int size) {
-        Random random = new Random();
-        Integer[] array = new Integer[size];
-        for (int i = 0; i < size; i++) {
-            array[i] = random.nextInt(size * 10);
+    private int calculateOptimalCapacity(int expectedMaxSize) {
+        if (expectedMaxSize > 5_000_000) {
+            // For 10M elements, start with large capacity to minimize resizing
+            return INITIAL_CAPACITY_LARGE;
+        } else {
+            // For 100K elements, use smaller initial capacity
+            return Math.max(INITIAL_CAPACITY_SMALL, expectedMaxSize + (expectedMaxSize >> 2)); // +25%
         }
-        return array;
     }
     
-    private static Integer[] generateNearlySortedArray(int size) {
-        Integer[] array = new Integer[size];
-        for (int i = 0; i < size; i++) {
-            array[i] = i;
+    /**
+     * Pushes an element onto the stack - O(1) amortized
+     * @param element the integer to push
+     */
+    public void push(int element) {
+        if (size == capacity) {
+            grow();
         }
-        // Add some random swaps to make it nearly sorted
-        Random random = new Random();
-        for (int i = 0; i < size / 10; i++) {
-            int idx1 = random.nextInt(size);
-            int idx2 = random.nextInt(size);
-            int temp = array[idx1];
-            array[idx1] = array[idx2];
-            array[idx2] = temp;
-        }
-        return array;
+        elements[size++] = element;
     }
     
-    private static void sortCustomObjects() {
-        Person[] people = {
-            new Person("Alice", 30),
-            new Person("Bob", 25),
-            new Person("Charlie", 35),
-            new Person("Diana", 28)
-        };
-        
-        System.out.println("Before sorting:");
-        for (Person person : people) {
-            System.out.println(person);
+    /**
+     * Pushes multiple elements in batch - more efficient for bulk operations
+     * @param values array of integers to push
+     */
+    public void pushAll(int[] values) {
+        if (size + values.length > capacity) {
+            grow(size + values.length);
         }
-        
-        // Sort by age using comparator
-        OptimalSorter.sortWithComparator(people, 
-            (p1, p2) -> Integer.compare(p1.getAge(), p2.getAge()));
-        
-        System.out.println("\nAfter sorting by age:");
-        for (Person person : people) {
-            System.out.println(person);
-        }
-        
-        // Verify sorted
-        System.out.println("Is sorted by age: " + isSortedByAge(people));
+        System.arraycopy(values, 0, elements, size, values.length);
+        size += values.length;
     }
     
-    private static boolean isSortedByAge(Person[] people) {
-        for (int i = 0; i < people.length - 1; i++) {
-            if (people[i].getAge() > people[i + 1].getAge()) {
-                return false;
-            }
+    /**
+     * Removes and returns the top element - O(1)
+     * @return the top element
+     * @throws IllegalStateException if stack is empty
+     */
+    public int pop() {
+        if (size == 0) {
+            throw new IllegalStateException("Stack is empty");
         }
-        return true;
+        return elements[--size];
     }
     
-    static class Person {
-        private String name;
-        private int age;
-        
-        public Person(String name, int age) {
-            this.name = name;
-            this.age = age;
+    /**
+     * Returns the top element without removing it - O(1)
+     * @return the top element
+     * @throws IllegalStateException if stack is empty
+     */
+    public int peek() {
+        if (size == 0) {
+            throw new IllegalStateException("Stack is empty");
+        }
+        return elements[size - 1];
+    }
+    
+    /**
+     * Checks if the stack is empty - O(1)
+     * @return true if empty, false otherwise
+     */
+    public boolean isEmpty() {
+        return size == 0;
+    }
+    
+    /**
+     * Returns the number of elements - O(1)
+     * @return current size
+     */
+    public int size() {
+        return size;
+    }
+    
+    /**
+     * Clears the stack without resizing the underlying array - O(1)
+     */
+    public void clear() {
+        size = 0;
+    }
+    
+    /**
+     * Trims the capacity to the current size to minimize memory usage
+     */
+    public void trimToSize() {
+        if (size < capacity) {
+            elements = Arrays.copyOf(elements, size);
+            capacity = size;
+        }
+    }
+    
+    /**
+     * Optimized growth strategy: double until 1M, then grow by 50%
+     */
+    private void grow() {
+        int newCapacity = capacity < 1_000_000 ? capacity << 1 : capacity + (capacity >> 1);
+        grow(newCapacity);
+    }
+    
+    private void grow(int minCapacity) {
+        int newCapacity = Math.max(minCapacity, capacity < 1_000_000 ? capacity << 1 : capacity + (capacity >> 1));
+        elements = Arrays.copyOf(elements, newCapacity);
+        capacity = newCapacity;
+    }
+    
+    /**
+     * Returns the current capacity (useful for debugging and monitoring)
+     * @return current capacity
+     */
+    public int capacity() {
+        return capacity;
+    }
+    
+    /**
+     * Bulk pop operation - pops multiple elements at once
+     * @param count number of elements to pop
+     * @return array of popped elements
+     */
+    public int[] popMultiple(int count) {
+        if (count > size) {
+            throw new IllegalStateException("Not enough elements in stack");
         }
         
-        public String getName() { return name; }
-        public int getAge() { return age; }
-        
-        @Override
-        public String toString() {
-            return String.format("Person{name='%s', age=%d}", name, age);
+        int[] result = new int[count];
+        for (int i = 0; i < count; i++) {
+            result[count - 1 - i] = pop(); // Maintain LIFO order in result
         }
+        return result;
     }
 }

@@ -1,59 +1,53 @@
 import java.util.LinkedList;
+import java.util.Arrays;
+import java.util.NoSuchElementException;
 
-class LifoQueue<T> {
-    private LinkedList<T> list = new LinkedList<>();
-
-    // Push an item onto the stack
-    public void push(T item) {
-        list.addFirst(item);
-        //System.out.println("Pushed: " + item);
-    }
-
-    // Pop the most recently added item
-    public T pop() {
-        if (isEmpty()) {
-            //System.out.println("Queue is empty!");
-            return null;
-        }
-        T item = list.removeFirst();
-        //System.out.println("Popped: " + item);
-        return item;
-    }
-
-    // Peek at the top item without removing it
-    public T peek() {
-        if (isEmpty()) {
-            System.out.println("Queue is empty!");
-            return null;
-        }
-        return list.getFirst();
-    }
-
-    // Check if the queue is empty
-    public boolean isEmpty() {
-        return list.isEmpty();
-    }
-
-    // Get the size of the queue
-    public int size() {
-        return list.size();
-    }
-}
 
 public class Main {
+    public static final int LARGE_CAP = 10_000_000;
+    public static final int SMALL_CAP = 100_000;
+
     public static void main(String[] args) {
         long startTime = System.nanoTime();
-        LifoQueue<Integer> lifo = new LifoQueue<>();
+        IntLifoQueue lifo = new IntLifoQueue(10000000);
 
 
-        for(int i=0; i<10000000; i++){
+        for (int i = 0; i < 10000000; i++) {
             lifo.push(i);
         }
 
-        for(int i=0; i<10000000; i++){
+        for (int i = 0; i < 10000000; i++) {
             lifo.pop();
         }
         long endTime = System.nanoTime();
         System.out.println("Czas: " + (endTime - startTime) / 1_000_000.0 + " ms");
+    }
+
+    static class IntLifoQueue {
+        private int[] data;
+        private int top;
+
+        public IntLifoQueue(int initialCapacity) {
+            this.data = new int[initialCapacity];
+            this.top = -1;
+        }
+
+        public void push(int value) {
+            if (top == data.length - 1) {
+                resize();
+            }
+            data[++top] = value;
+        }
+
+        public int pop() {
+            return data[top--];
+        }
+
+        private void resize() {
+            int newCapacity = data.length + (data.length >> 1);
+            int[] newData = new int[newCapacity];
+            System.arraycopy(data, 0, newData, 0, data.length);
+            data = newData;
+        }
     }
 }

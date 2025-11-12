@@ -1,71 +1,75 @@
-import java.util.EmptyStackException;
+import java.util.Random;
+import java.util.concurrent.TimeUnit;
 
-/**
- * Demonstration of the optimized LIFO queue
- */
 public class Main {
+    private static final Random RANDOM = new Random();
+
     public static void main(String[] args) {
-        System.out.println("=== High-Performance LIFO Queue Demo ===\n");
-
-        // Create a non-thread-safe version for maximum speed
-        FastLifoQueue<Integer> lifo = new FastLifoQueue<>();
-
-        // Benchmark push operations
-        System.out.println("Pushing 1,000,000 items...");
         long startTime = System.nanoTime();
+        System.out.println("FastIntLifoQueue Performance Test");
+        System.out.println("=================================");
 
-        for (int i = 0; i < 1_000_000; i++) {
-            lifo.push(i);
+        // Test with 100K elements
+        testWithSize(100_000, "100K elements");
+
+        // Test with 10M elements
+        testWithSize(10_000_000, "10M elements");
+
+        // Test bulk operations
+        testBulkOperations();
+        long endTime = System.nanoTime();
+        System.out.println("Czas: " + (endTime - startTime) / 1_000_000.0 + " ms");
+    }
+
+    private static void testWithSize(int size, String description) {
+        System.out.println("\nTesting with " + description + ":");
+
+        FastIntLifoQueue stack = new FastIntLifoQueue(size);
+
+        // Test push performance
+        long startTime = System.nanoTime();
+        for (int i = 0; i < size; i++) {
+            stack.push(RANDOM.nextInt());
         }
-
         long pushTime = System.nanoTime() - startTime;
-        System.out.printf("Push time: %,d ns%n", pushTime);
-        System.out.printf("Queue size: %,d%n", lifo.size());
 
-        // Benchmark pop operations
-        System.out.println("\nPopping all items...");
+        // Test pop performance
         startTime = System.nanoTime();
-
-        while (!lifo.isEmpty()) {
-            lifo.pop();
+        for (int i = 0; i < size; i++) {
+            stack.pop();
         }
-
         long popTime = System.nanoTime() - startTime;
-        System.out.printf("Pop time: %,d ns%n", popTime);
-        System.out.printf("Queue empty: %b%n", lifo.isEmpty());
 
-        // Demonstration of basic operations
-        System.out.println("\n=== Basic Operations Demo ===");
+        System.out.printf("Push time: %,d ms%n", TimeUnit.NANOSECONDS.toMillis(pushTime));
+        System.out.printf("Pop time:  %,d ms%n", TimeUnit.NANOSECONDS.toMillis(popTime));
+        System.out.printf("Initial capacity: %,d%n", stack.capacity());
+    }
 
-        lifo.push(10);
-        lifo.push(20);
-        lifo.push(30);
+    private static void testBulkOperations() {
+        System.out.println("\nTesting Bulk Operations:");
 
-        System.out.println("After pushing 10, 20, 30:");
-        System.out.println("Peek: " + lifo.peek()); // Should be 30
-        System.out.println("Pop: " + lifo.pop());   // Should be 30
-        System.out.println("Pop: " + lifo.pop());   // Should be 20
-        System.out.println("Peek: " + lifo.peek()); // Should be 10
-
-        // Thread-safe version demo
-        System.out.println("\n=== Thread-Safe Version ===");
-        FastLifoQueue<String> threadSafeLifo = new FastLifoQueue<>(true);
-
-        threadSafeLifo.push("First");
-        threadSafeLifo.push("Second");
-        threadSafeLifo.push("Third");
-
-        System.out.println("Thread-safe LIFO contents:");
-        while (!threadSafeLifo.isEmpty()) {
-            System.out.println("Popped: " + threadSafeLifo.pop());
+        FastIntLifoQueue stack = new FastIntLifoQueue(100_000);
+        int[] bulkData = new int[50_000];
+        for (int i = 0; i < bulkData.length; i++) {
+            bulkData[i] = RANDOM.nextInt();
         }
 
-        // Error handling demo
-        System.out.println("\n=== Error Handling ===");
-        try {
-            threadSafeLifo.pop();
-        } catch (EmptyStackException e) {
-            System.out.println("Correctly caught EmptyStackException: " + e.getMessage());
+        // Single push timing
+        long startTime = System.nanoTime();
+        for (int value : bulkData) {
+            stack.push(value);
         }
+        long singlePushTime = System.nanoTime() - startTime;
+
+        stack.clear();
+
+        // Bulk push timing
+        startTime = System.nanoTime();
+        stack.pushAll(bulkData);
+        long bulkPushTime = System.nanoTime() - startTime;
+
+        System.out.printf("Single push time: %,d ms%n", TimeUnit.NANOSECONDS.toMillis(singlePushTime));
+        System.out.printf("Bulk push time:   %,d ms%n", TimeUnit.NANOSECONDS.toMillis(bulkPushTime));
+        System.out.printf("Bulk operations %.1fx faster%n", (double)singlePushTime / bulkPushTime);
     }
 }
