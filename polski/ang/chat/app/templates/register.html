@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <link rel="stylesheet" href="{{ url_for('static', filename = 'css/main.css') }}">
+    <title>Rejestracja</title>
+</head>
+<body>
+    <div class="login-container">
+        <h1>Rejestracja</h1>
+        <h3>Twoje hasło powinno zawierać WIELKIE i małe LiTeRy, c7fr7 oraz zn@k! $pe(j@lne</h3>
+        <form method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="form-group">
+                <label for="username">Nazwa użytkownika</label>
+                <input type="text" id="username" name="username" placeholder="Wpisz nazwę użytkownika" required>
+            </div>
+            <div class="form-group">
+                <label for="email">Email</label>
+                <input type="email" id="email" name="email" placeholder="Podaj adres" required>
+            </div>
+            <div class="form-group">
+                <label for="password">Hasło</label>
+                <input type="password" id="password" name="password" placeholder="Wpisz hasło" required>
+            </div>
+            <div id="entropy-display" class="password-strength"></div>
+            <br>
+            <button type="submit" class="submit-button" >Zarejestruj się</button>
+        </form>
+        <p>Masz już konto? <a href="/">Zaloguj się</a></p>
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                <ul>
+                    {% for category, message in messages %}
+                        <li class="{{ category }}">{{ message }}</li>
+                    {% endfor %}
+                </ul>
+            {% endif %}
+        {% endwith %}
+    </div>
+    
+    <script>
+        // Funkcja obliczania entropii hasła
+        function calculateEntropy(password) {
+            const charsets = [
+                { regex: /[a-z]/, size: 26 }, // małe litery
+                { regex: /[A-Z]/, size: 26 }, // duże litery
+                { regex: /[0-9]/, size: 10 }, // cyfry
+                { regex: /[^a-zA-Z0-9]/, size: 32 } // znaki specjalne
+            ];
+
+            let poolSize = 0;
+            charsets.forEach(charset => {
+                if (charset.regex.test(password)) {
+                    poolSize += charset.size;
+                }
+            });
+
+            if (poolSize === 0) return 0; // brak dopasowań do żadnej kategorii
+
+            // Obliczenie entropii
+            return Math.log2(poolSize) * password.length;
+        }
+
+        // Funkcja aktualizacji wyświetlania entropii
+        function updateEntropyDisplay() {
+            const passwordField = document.getElementById("password");
+            const entropyDisplay = document.getElementById("entropy-display");
+            const password = passwordField.value;
+            const entropy = calculateEntropy(password);
+
+            let strengthText = "Siła hasła: ";
+            let strengthClass = "";
+
+            if (entropy < 28) {
+                strengthText += "Niska";
+                strengthClass = "strength-low";
+            } else if (entropy < 56) {
+                strengthText += "Średnia";
+                strengthClass = "strength-medium";
+            } else {
+                strengthText += "Wysoka";
+                strengthClass = "strength-high";
+            }
+
+            entropyDisplay.textContent = `${strengthText}`;
+            entropyDisplay.className = `password-strength ${strengthClass}`;
+        }
+
+        // Nasłuchiwanie zmian w polu hasła
+        document.getElementById("password").addEventListener("input", updateEntropyDisplay);
+    </script>
+</body>
+</html>

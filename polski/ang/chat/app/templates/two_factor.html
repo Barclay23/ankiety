@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Weryfikacja dwuetapowa</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+</head>
+<body>
+    <div class="container">
+        <h2>Weryfikacja dwuetapowa</h2>
+        <p>Aby zakończyć proces rejestracji, wykonaj następujące kroki:</p>
+        <ol>
+            <li>Zeskanuj poniższy kod QR za pomocą swojej aplikacji do generowania kodów TOTP (np. Google Authenticator lub Authy).</li>
+            <li>Wprowadź wygenerowany kod w poniższym polu.</li>
+        </ol>
+        <div class="qr-code">
+            <!-- Wyświetlenie kodu QR -->
+            <img src="data:image/png;base64,{{ qr_code_base64 }}" alt="Kod QR">
+        </div>
+        <form method="POST" action="{{ url_for('verify') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="form-group">
+                <label for="totp_token">Kod TOTP:</label>
+                <input type="text" id="totp_token" name="totp_token" required pattern="[0-9]{6}" placeholder="Wprowadź 6-cyfrowy kod">
+            </div>
+            <div class="form-group">
+                <label for="username">Nazwa użytkownika</label>
+                <input type="text" id="username" name="username" placeholder="Wpisz nazwę użytkownika" required>
+            </div>
+            <div class="form-group">
+                <label for="password">Hasło</label>
+                <input type="password" id="password" name="password" required>
+            </div>
+            <br>
+            <button type="submit" class="submit-button">Zweryfikuj</button>
+        </form>
+    </div>
+</body>
+</html>

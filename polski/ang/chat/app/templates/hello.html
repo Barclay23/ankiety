@@ -1,0 +1,111 @@
+    <div class="notes-container">
+      <div class="notes-section">
+        {% if notes|length > 0 %}
+          {% for note in notes %}
+          <div class="note" id="note-{{ note.id }}">
+            <div class="note-content">{{ note.message | safe }}</div>
+            <div class="note-details">
+              <span>Autor:
+                <a href="{{ url_for('user_page', user=note.author) }}">
+                  {{ note.author }}
+                </a>
+              </span>
+              <span>Data utworzenia: {{ note.created_at }}</span>
+              <span>Adres IP: {{ note.ip_address }}</span>
+            </div>
+
+            <div class="note-extra hidden" id="extra-{{ loop.index }}">
+              <p><strong>Podpis:</strong> {{ note.signature or "invalid or missing" }}</p>
+              <p><strong>Klucz publiczny:</strong><pre style="white-space:pre-wrap;">{{ note.public_key }}</pre></p>
+              <p><strong>Notka w BASE64:</strong> {{ note.base_64 }}</p>
+            </div>
+            <button class="download-button" onclick="showExtra('{{ loop.index }}')">
+              Pokaż podpis i klucz publiczny
+            </button>
+
+            <!-- COMMENTS SECTION -->
+            <div class="comments-wrapper">
+              <button class="toggle-comments-button" onclick="toggleComments({{ note.id }})" id="toggle-btn-{{ note.id }}">
+                Pokaż komentarze ({{ note.comments|length }})
+              </button>
+
+              <div class="comments-section hidden" id="comments-{{ note.id }}">
+                {% if note.comments %}
+                  <ul class="comments-list">
+                    {% for c in note.comments %}
+                      <li class="comment-item">
+                        <div class="comment-text">{{ c.comment | e }}</div>
+                        <div class="comment-meta">
+                          <span>Autor: <a href="{{ url_for('user_page', user=c.author) }}">{{ c.author }}</a></span>
+                          <span>IP: {{ c.ip_address }}</span>
+                          <span>Data: {{ c.created_at }}</span>
+                          <span>Zweryfikowany: {{ "tak" if c.verified else "nie" }}</span>
+                        </div>
+                        <div class="comment-extra hidden" id="comment-extra-{{ c.id }}">
+                          <p><strong>Podpis (base64):</strong> {{ c.signature }}</p>
+                          <p><strong>Hash komentarza:</strong> {{ c.comment_hash }}</p>
+                        </div>
+                        <button onclick="toggleCommentExtra({{ c.id }})">Pokaż podpis i hash</button>
+                      </li>
+                    {% endfor %}
+                  </ul>
+                {% else %}
+                  <p>Brak komentarzy do tej notatki.</p>
+                {% endif %}
+
+                <!-- Add comment form -->
+                <div class="add-comment">
+                  <form action="{{ url_for('add_comment') }}" method="post" onsubmit="return confirmAddComment(this);">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="note_id" value="{{ note.id }}">
+                    <div>
+                      <label for="comment_text_{{ note.id }}">Dodaj komentarz:</label><br>
+                      <textarea id="comment_text_{{ note.id }}" name="comment_text" rows="3" cols="60" placeholder="Twój komentarz..." required></textarea>
+                    </div>
+                    <div>
+                      <label for="comment_password_{{ note.id }}">Hasło (wymagane do podpisu):</label>
+                      <input type="password" id="comment_password_{{ note.id }}" name="password" placeholder="Podaj hasło" required>
+                    </div>
+                    <button type="submit">Dodaj komentarz</button>
+                  </form>
+                </div>
+              </div>
+            </div>
+            <!-- END COMMENTS SECTION -->
+
+          </div>
+          {% endfor %}
+        {% else %}
+        <p>Nie ma jeszcze żadnych notatek. Dodaj pierwszą, korzystając z formularza obok!</p>
+        {% endif %}
+      </div>
+    </div>
+
+  <script>
+    function showExtra(index) {
+      const extraSection = document.getElementById(`extra-${index}`);
+      if (extraSection) {
+        extraSection.classList.toggle("hidden");
+      }
+    }
+
+    function toggleComments(noteId) {
+      const comments = document.getElementById(`comments-${noteId}`);
+      const btn = document.getElementById(`toggle-btn-${noteId}`);
+      if (!comments) return;
+      comments.classList.toggle("hidden");
+      if (btn) {
+        btn.textContent = comments.classList.contains("hidden") ? `Pokaż komentarze` : `Ukryj komentarze`;
+      }
+    }
+
+    function toggleCommentExtra(commentId) {
+      const el = document.getElementById(`comment-extra-${commentId}`);
+      if (el) el.classList.toggle("hidden");
+    }
+
+    function confirmAddComment(form) {
+      // optional: simple UI confirm to avoid accidental submits
+      return true;
+    }
+  </script>
