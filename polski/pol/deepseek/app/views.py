@@ -24,8 +24,6 @@ import base64
 from datetime import datetime, timedelta
 import base64
 import time
-from sqlite3 import IntegrityError
-
 
 csrf = CSRFProtect(app)
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'DJ~AuNK#nV-5kp.=F=kr~0LK][{kS@')
@@ -87,78 +85,126 @@ def init_db():
                 FOREIGN KEY (user_id) REFERENCES users_of_this_app(id)
             )
         ''')
-
-        # NEW table to track likes: one row per user per note. Unique constraint prevents duplicate likes.
+        # NOWA TABELA DLA LAJKÓW
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS likes_of_this_app (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id INTEGER NOT NULL,
                 note_id INTEGER NOT NULL,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
-                ip_address TEXT,
+                UNIQUE(user_id, note_id),
                 FOREIGN KEY (user_id) REFERENCES users_of_this_app(id),
-                FOREIGN KEY (note_id) REFERENCES notes_of_this_app(id),
-                UNIQUE(user_id, note_id)
+                FOREIGN KEY (note_id) REFERENCES notes_of_this_app(id) ON DELETE CASCADE
             )
         ''')
-
         conn.commit()
 
 init_db()
-
-@app.route("/like", methods=["POST"])
-def like_note():
-    # Require login
-    if "user" not in session:
-        flash("Musisz być zalogowany, aby głosować.", "warning")
-        return redirect(url_for("index"))
-
-    username = session["user"]
-    note_id = request.form.get("note_id")
-    ip_address = request.headers.get("X-Forwarded-For", request.headers.get("X-Real-IP", request.remote_addr))
-
-    if not note_id:
-        flash("Nieprawidłowe żądanie.", "danger")
-        return redirect(url_for("dashboard"))
-
-    try:
-        note_id = int(note_id)
-    except ValueError:
-        flash("Nieprawidłowe ID notatki.", "danger")
-        return redirect(url_for("dashboard"))
-
-    # Lookup user id
+def get_note_likes_count(note_id):
+    """Pobiera liczbę lajków dla notatki"""
     with sqlite3.connect("users.db") as conn:
         cursor = conn.cursor()
-        cursor.execute("SELECT id FROM users_of_this_app WHERE username = ?", (username,))
-        row = cursor.fetchone()
-        if not row:
-            log_event("ERROR", "Like_user_missing", None, ip_address)
-            flash("Niepoprawne dane użytkownika.", "danger")
-            return redirect(url_for("dashboard"))
-        user_id = row[0]
+        cursor.execute('''
+            SELECT COUNT(*) FROM likes_of_this_app WHERE note_id = ?
+        ''', (note_id,))
+        return cursor.fetchone()[0]
 
-    # Attempt to insert like; unique constraint prevents duplicates
+def has_user_liked_note(user_id, note_id):
+    """Sprawdza czy użytkownik już polubił notatkę"""
+    with sqlite3.connect("users.db") as conn:
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT 1 FROM likes_of_this_app WHERE user_id = ? AND note_id = ?
+        ''', (user_id, note_id))
+        return cursor.fetchone() is not None
+
+def add_like_to_db(user_id, note_id):
+    """Dodaje lajka do bazy danych"""
     try:
         with sqlite3.connect("users.db") as conn:
             cursor = conn.cursor()
             cursor.execute('''
-                INSERT INTO likes_of_this_app (user_id, note_id, ip_address)
-                VALUES (?, ?, ?)
-            ''', (user_id, note_id, ip_address))
+                INSERT INTO likes_of_this_app (user_id, note_id)
+                VALUES (?, ?)
+            ''', (user_id, note_id))
             conn.commit()
-        log_event("LIKE_ADDED", f"User {user_id} liked note {note_id}", user_id, ip_address)
-        flash("Dziękujemy za głos!", "success")
-    except IntegrityError:
-        # duplicate like (user already liked this note)
-        log_event("LIKE_DUPLICATE", f"Duplicate like attempt user {user_id} note {note_id}", user_id, ip_address)
-        flash("Już zagłosowałeś na tę notatkę.", "info")
-    except Exception as e:
-        log_event("ERROR", f"Like_error:{e}", user_id, ip_address)
-        flash("Wystąpił błąd podczas dodawania głosu.", "danger")
+            return True
+    except sqlite3.IntegrityError:
+        # Użytkownik już polubił ten post
+        return False
+    except sqlite3.Error as e:
+        log_event("ERROR", f"Like error: {str(e)}", user_id)
+        return False
 
+def remove_like_from_db(user_id, note_id):
+    """Usuwa lajka z bazy danych"""
+    try:
+        with sqlite3.connect("users.db") as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                DELETE FROM likes_of_this_app WHERE user_id = ? AND note_id = ?
+            ''', (user_id, note_id))
+            conn.commit()
+            return cursor.rowcount > 0
+    except sqlite3.Error as e:
+        log_event("ERROR", f"Unlike error: {str(e)}", user_id)
+        return False
+    
+@app.route("/like/<int:note_id>", methods=["POST"])
+def like_note(note_id):
+    delay = 2
+    start_time = time.time()
+    
+    if "user" not in session:
+        if time.time() - start_time < delay:
+            time.sleep(delay - (time.time() - start_time))
+        flash("Musisz być zalogowany, aby lajkować notatki.", "warning")
+        return redirect(url_for("index"))
+    
+    username = session["user"]
+    ip_address = request.headers.get("X-Forwarded-For", request.headers.get("X-Real-IP", request.remote_addr))
+    
+    # Pobierz ID użytkownika
+    with sqlite3.connect("users.db") as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT id FROM users_of_this_app WHERE username = ?", (username,))
+        user = cursor.fetchone()
+        
+        if not user:
+            if time.time() - start_time < delay:
+                time.sleep(delay - (time.time() - start_time))
+            flash("Błąd autoryzacji.", "danger")
+            return redirect(url_for("dashboard"))
+        
+        user_id = user[0]
+        
+        # Sprawdź czy notatka istnieje
+        cursor.execute("SELECT id FROM notes_of_this_app WHERE id = ?", (note_id,))
+        if not cursor.fetchone():
+            if time.time() - start_time < delay:
+                time.sleep(delay - (time.time() - start_time))
+            flash("Notatka nie istnieje.", "danger")
+            return redirect(url_for("dashboard"))
+    
+    action = request.form.get("action", "like")
+    
+    if action == "like":
+        if add_like_to_db(user_id, note_id):
+            log_event("NOTE_LIKED", f"User liked note {note_id}", user_id, ip_address)
+            flash("Polubiono notatkę!", "success")
+        else:
+            flash("Już polubiłeś tę notatkę!", "info")
+    elif action == "unlike":
+        if remove_like_from_db(user_id, note_id):
+            log_event("NOTE_UNLIKED", f"User unliked note {note_id}", user_id, ip_address)
+            flash("Cofnięto like!", "success")
+        else:
+            flash("Nie polubiłeś tej notatki!", "info")
+    
+    if time.time() - start_time < delay:
+        time.sleep(delay - (time.time() - start_time))
+    
     return redirect(url_for("dashboard"))
-
 def generate_key_from_password(password, salt):
     kdf = PBKDF2HMAC(
         algorithm=SHA256(),
@@ -682,31 +728,36 @@ def dashboard():
 
     if "user" in session:
         username = session['user']
+        
+        # Pobierz ID aktualnego użytkownika
+        with sqlite3.connect("users.db") as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT id FROM users_of_this_app WHERE username = ?", (username,))
+            current_user = cursor.fetchone()
+            current_user_id = current_user[0] if current_user else None
+
         notes = []
 
         with sqlite3.connect("users.db") as conn:
             cursor = conn.cursor()
-            # include id so we can reference it in likes
             cursor.execute(
                 """
-                SELECT id, message, created_at, signature, ip_address, author
+                SELECT id, message, created_at, signature, ip_address, author 
                 FROM notes_of_this_app 
                 ORDER BY created_at DESC
                 """
             )
             user_notes = cursor.fetchall()
-
-            # Get current user's id once
-            cursor.execute("SELECT id FROM users_of_this_app WHERE username = ?", (username,))
-            row = cursor.fetchone()
-            current_user_id = row[0] if row else None
-
             for note in user_notes:
                 note_id, message, created_at, signature, ip_address, author = note
                 base_64 = base64.b64encode(message.encode('utf-8')).decode('utf-8')
 
                 cursor.execute(
-                    "SELECT id, public_key FROM users_of_this_app WHERE username = ?",
+                    """
+                    SELECT id, public_key 
+                    FROM users_of_this_app 
+                    WHERE username = ?
+                    """, 
                     (author,)
                 )
                 author_data = cursor.fetchone()
@@ -714,7 +765,7 @@ def dashboard():
                     log_event("ERROR", "Missing note author", None, ip_address)
                     continue
 
-                author_id, public_key_bytes = author_data
+                id, public_key_bytes = author_data
                 public_key = serialization.load_pem_public_key(
                     public_key_bytes,
                     backend=default_backend()
@@ -731,46 +782,39 @@ def dashboard():
                         ),
                         hashes.SHA256()
                     )
-                    public_key_pem = public_key.public_bytes(
+                    public_key_str = public_key.public_bytes(
                         encoding=serialization.Encoding.PEM,
                         format=serialization.PublicFormat.SubjectPublicKeyInfo
                     ).decode('utf-8')
 
-                    signature_b64 = base64.b64encode(signature_bytes).decode('utf-8')
-
-                    # like count
-                    cursor.execute("SELECT COUNT(1) FROM likes_of_this_app WHERE note_id = ?", (note_id,))
-                    like_count = cursor.fetchone()[0]
-
-                    # whether current user already liked it
-                    liked = False
-                    if current_user_id:
-                        cursor.execute("SELECT 1 FROM likes_of_this_app WHERE note_id = ? AND user_id = ? LIMIT 1",
-                                       (note_id, current_user_id))
-                        liked = cursor.fetchone() is not None
+                    signature_str = base64.b64encode(signature).decode('utf-8')
+                    
+                    # Pobierz liczbę lajków i informację czy aktualny użytkownik polubił
+                    likes_count = get_note_likes_count(note_id)
+                    user_has_liked = has_user_liked_note(current_user_id, note_id) if current_user_id else False
 
                     notes.append({
                         "id": note_id,
-                        "public_key": public_key_pem,
+                        "public_key": public_key_str,
                         "message": message,
                         "author": author,
                         "created_at": created_at,
-                        "signature": signature_b64,
+                        "signature": signature_str,
                         "ip_address": ip_address,
                         "base_64": base_64,
-                        "like_count": like_count,
-                        "liked": liked
+                        "likes_count": likes_count,
+                        "user_has_liked": user_has_liked
                     })
                 except Exception as e:
-                    log_event("ERROR", "Loading_messages_error"+str(e), author_id, user_ip_address)
-
-        log_event("NOTES_LOADED", "Notes_loaded", None, user_ip_address)
-        if(time.time()-start_time<delay):
-            time.sleep(delay-(start_time-time.time()))
-        return render_template("hello.html", username=username, notes=notes)
+                    log_event("ERROR", "Loading_messages_error"+str(e), id, user_ip_address)
+        
+        log_event("NOTES_LOADED", "Notes_loaded", current_user_id, user_ip_address)
+        if time.time() - start_time < delay:
+            time.sleep(delay - (time.time() - start_time))
+        return render_template("hello.html", username=username, notes=notes, current_user_id=current_user_id)
     else:
-        if(time.time()-start_time<delay):
-            time.sleep(delay-(start_time-time.time()))
+        if time.time() - start_time < delay:
+            time.sleep(delay - (time.time() - start_time))
         flash("Musisz być zalogowany, aby zobaczyć tę stronę.", "warning")
         log_event("ERROR", "Someone_not_logged", None, user_ip_address)
         return redirect(url_for("index"))

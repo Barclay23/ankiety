@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Konto</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename = 'css/main.css') }}">
+  <style>
+    .container {
+      display: flex;
+      flex-direction: row;
+      gap: 20px;
+      width: 100%;
+      max-width: 1200px;
+      height: 90vh;
+    }
+    
+    .like-button {
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-size: 1.2em;
+      padding: 5px 10px;
+      border-radius: 5px;
+      transition: all 0.3s ease;
+    }
+    
+    .like-button:hover {
+      background-color: #f0f0f0;
+    }
+    
+    .like-button.liked {
+      color: #007bff;
+    }
+    
+    .like-button:not(.liked) {
+      color: #6c757d;
+    }
+    
+    .likes-count {
+      margin-left: 5px;
+      font-weight: bold;
+    }
+    
+    .like-section {
+      display: flex;
+      align-items: center;
+      margin-top: 10px;
+      gap: 10px;
+    }
+    
+    .note-actions {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 10px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="form-container">
+      <h1>Witaj, {{ username }}!</h1>
+      <form action="{{ url_for('render') }}" method="post">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="form-group">
+          <label for="markdown">Dodaj nową notatkę (markdown):</label>
+          <textarea id="markdown" name="markdown" rows="10" cols="50" placeholder="Wpisz tutaj swój markdown..."></textarea>
+        </div>
+        <div class="form-group">
+          <label for="password">Podaj hasło:</label>
+          <input type="password" id="password" name="password" placeholder="Wpisz hasło" required>
+        </div>
+        <button type="submit" class="submit-button">Dodaj</button>
+      </form>
+      <form action="{{ url_for('logout') }}" method="post">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="logout-button">Wyloguj</button>
+      </form>
+    </div>
+
+    <div class="notes-container">
+      <div class="notes-section">
+        {% if notes|length > 0 %}
+          {% for note in notes %}
+          <div class="note">
+            <div class="note-content">{{ note.message | safe }}</div>
+            <div class="note-details">
+              <span>Autor:
+                <a href="{{ url_for('user_page', user=note.author) }}">
+                  {{ note.author }}
+                </a>
+              </span>
+              <span>Data utworzenia: {{ note.created_at }}</span>
+              <span>Adres IP: {{ note.ip_address }}</span>
+            </div>
+            
+            <!-- SEKCJA LAJKÓW -->
+            <div class="note-actions">
+              <div class="like-section">
+                <form action="{{ url_for('like_note', note_id=note.id) }}" method="post" style="display: inline;">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  {% if note.user_has_liked %}
+                    <input type="hidden" name="action" value="unlike">
+                    <button type="submit" class="like-button liked" title="Cofnij like">
+                      👍 <span class="likes-count">{{ note.likes_count }}</span>
+                    </button>
+                  {% else %}
+                    <input type="hidden" name="action" value="like">
+                    <button type="submit" class="like-button" title="Polub notatkę">
+                      👍 <span class="likes-count">{{ note.likes_count }}</span>
+                    </button>
+                  {% endif %}
+                </form>
+              </div>
+              
+              <button class="download-button" onclick="showExtra('{{ loop.index }}')">
+                Pokaż podpis i klucz publiczny
+              </button>
+            </div>
+            
+            <div class="note-extra hidden" id="extra-{{ loop.index }}">
+              <p><strong>Podpis:</strong> {{ note.signature }}</p>
+              <p><strong>Klucz publiczny:</strong> {{ note.public_key }}</p>
+              <p><strong>Notka w BASE64:</strong> {{ note.base_64 }}</p>
+            </div>
+          </div>
+          {% endfor %}
+        {% else %}
+        <p>Nie ma jeszcze żadnych notatek. Dodaj pierwszą, korzystając z formularza obok!</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function showExtra(index) {
+      const extraSection = document.getElementById(`extra-${index}`);
+      if (extraSection) {
+        extraSection.classList.toggle("hidden");
+      }
+    }
+  </script>
+</body>
+</html>

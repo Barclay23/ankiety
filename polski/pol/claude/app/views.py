@@ -24,6 +24,7 @@ import base64
 from datetime import datetime, timedelta
 import base64
 import time
+from flask import jsonify
 
 csrf = CSRFProtect(app)
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'DJ~AuNK#nV-5kp.=F=kr~0LK][{kS@')
@@ -85,9 +86,107 @@ def init_db():
                 FOREIGN KEY (user_id) REFERENCES users_of_this_app(id)
             )
         ''')
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS likes_of_this_app (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                note_id INTEGER NOT NULL,
+                user_id INTEGER NOT NULL,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
+                FOREIGN KEY (note_id) REFERENCES notes_of_this_app(id) ON DELETE CASCADE,
+                FOREIGN KEY (user_id) REFERENCES users_of_this_app(id) ON DELETE CASCADE,
+                UNIQUE(note_id, user_id)
+            )
+        ''')
         conn.commit()
 
 init_db()
+@app.route("/like/<int:note_id>", methods=["POST"])
+def like_note(note_id):
+    delay = 2
+    start_time = time.time()
+    
+    username = session.get("user")
+    ip_address = request.headers.get("X-Forwarded-For", request.headers.get("X-Real-IP", request.remote_addr))
+    
+    if not username:
+        if time.time() - start_time < delay:
+            time.sleep(delay - (time.time() - start_time))
+        log_event("ERROR", "Like_attempt_not_logged", None, ip_address)
+        return jsonify({"success": False, "message": "Musisz być zalogowany"}), 401
+    
+    with sqlite3.connect("users.db") as conn:
+        cursor = conn.cursor()
+        
+        # Pobierz user_id
+        cursor.execute("SELECT id FROM users_of_this_app WHERE username = ?", (username,))
+        user = cursor.fetchone()
+        
+        if not user:
+            if time.time() - start_time < delay:
+                time.sleep(delay - (time.time() - start_time))
+            return jsonify({"success": False, "message": "Użytkownik nie istnieje"}), 404
+        
+        user_id = user[0]
+        
+        # Sprawdź czy notatka istnieje
+        cursor.execute("SELECT id FROM notes_of_this_app WHERE id = ?", (note_id,))
+        note = cursor.fetchone()
+        
+        if not note:
+            if time.time() - start_time < delay:
+                time.sleep(delay - (time.time() - start_time))
+            log_event("ERROR", f"Like_attempt_invalid_note_{note_id}", user_id, ip_address)
+            return jsonify({"success": False, "message": "Notatka nie istnieje"}), 404
+        
+        # Sprawdź czy użytkownik już polubił tę notatkę
+        cursor.execute(
+            "SELECT id FROM likes_of_this_app WHERE note_id = ? AND user_id = ?",
+            (note_id, user_id)
+        )
+        existing_like = cursor.fetchone()
+        
+        if existing_like:
+            # Usuń lajka (unlike)
+            cursor.execute(
+                "DELETE FROM likes_of_this_app WHERE note_id = ? AND user_id = ?",
+                (note_id, user_id)
+            )
+            conn.commit()
+            
+            # Pobierz aktualną liczbę lajków
+            cursor.execute("SELECT COUNT(*) FROM likes_of_this_app WHERE note_id = ?", (note_id,))
+            like_count = cursor.fetchone()[0]
+            
+            log_event("UNLIKE", f"Note_{note_id}_unliked", user_id, ip_address)
+            
+            if time.time() - start_time < delay:
+                time.sleep(delay - (time.time() - start_time))
+            
+            return jsonify({"success": True, "action": "unliked", "likes": like_count}), 200
+        else:
+            # Dodaj lajka
+            try:
+                cursor.execute(
+                    "INSERT INTO likes_of_this_app (note_id, user_id) VALUES (?, ?)",
+                    (note_id, user_id)
+                )
+                conn.commit()
+                
+                # Pobierz aktualną liczbę lajków
+                cursor.execute("SELECT COUNT(*) FROM likes_of_this_app WHERE note_id = ?", (note_id,))
+                like_count = cursor.fetchone()[0]
+                
+                log_event("LIKE", f"Note_{note_id}_liked", user_id, ip_address)
+                
+                if time.time() - start_time < delay:
+                    time.sleep(delay - (time.time() - start_time))
+                
+                return jsonify({"success": True, "action": "liked", "likes": like_count}), 200
+            except sqlite3.IntegrityError:
+                if time.time() - start_time < delay:
+                    time.sleep(delay - (time.time() - start_time))
+                return jsonify({"success": False, "message": "Już polubiłeś tę notatkę"}), 400
+            
 
 def generate_key_from_password(password, salt):
     kdf = PBKDF2HMAC(
@@ -618,16 +717,22 @@ def dashboard():
 
         with sqlite3.connect("users.db") as conn:
             cursor = conn.cursor()
+            
+            # Pobierz user_id zalogowanego użytkownika
+            cursor.execute("SELECT id FROM users_of_this_app WHERE username = ?", (username,))
+            current_user = cursor.fetchone()
+            current_user_id = current_user[0] if current_user else None
+            
             cursor.execute(
                 """
-                SELECT message, created_at, signature, ip_address, author 
+                SELECT message, created_at, signature, ip_address, author, id 
                 FROM notes_of_this_app 
                 ORDER BY created_at DESC
                 """
             )
             user_notes = cursor.fetchall()
             for note in user_notes:
-                message, created_at, signature, ip_address, author = note
+                message, created_at, signature, ip_address, author, note_id = note
                 base_64 = base64.b64encode(message.encode('utf-8')).decode('utf-8')
 
                 cursor.execute(
@@ -667,15 +772,31 @@ def dashboard():
                     public_key = public_key.decode('utf-8')
 
                     signature = base64.b64encode(signature).decode('utf-8')
+                    
+                    # Pobierz liczbę lajków dla notatki
+                    cursor.execute("SELECT COUNT(*) FROM likes_of_this_app WHERE note_id = ?", (note_id,))
+                    like_count = cursor.fetchone()[0]
+                    
+                    # Sprawdź czy zalogowany użytkownik polubił tę notatkę
+                    user_liked = False
+                    if current_user_id:
+                        cursor.execute(
+                            "SELECT id FROM likes_of_this_app WHERE note_id = ? AND user_id = ?",
+                            (note_id, current_user_id)
+                        )
+                        user_liked = cursor.fetchone() is not None
 
                     notes.append({
+                    "id": note_id,
                     "public_key": public_key,
                     "message": message,
                     "author": author,
                     "created_at": created_at,
                     "signature": signature,
                     "ip_address": ip_address,
-                    "base_64": base_64
+                    "base_64": base_64,
+                    "likes": like_count,
+                    "user_liked": user_liked
                 })
                 except Exception as e:
                     log_event("ERROR", "Loading_messages_error"+str(e), id, user_ip_address)

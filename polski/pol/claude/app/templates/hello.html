@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Konto</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename = 'css/main.css') }}">
+  <style>
+    .container {
+      display: flex;
+      flex-direction: row;
+      gap: 20px;
+      width: 100%;
+      max-width: 1200px;
+      height: 90vh;
+    }
+    
+    .like-button {
+      background: none;
+      border: 2px solid #007bff;
+      color: #007bff;
+      padding: 8px 16px;
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 16px;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      transition: all 0.3s ease;
+      margin-top: 10px;
+    }
+    
+    .like-button:hover {
+      background-color: #007bff;
+      color: white;
+    }
+    
+    .like-button.liked {
+      background-color: #007bff;
+      color: white;
+      border-color: #0056b3;
+    }
+    
+    .like-button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    
+    .like-icon {
+      font-size: 18px;
+    }
+    
+    .like-count {
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="form-container">
+      <h1>Witaj, {{ username }}!</h1>
+      <form action="{{ url_for('render') }}" method="post">
+        <div class="form-group">
+          <label for="markdown">Dodaj nową notatkę (markdown):</label>
+          <textarea id="markdown" name="markdown" rows="10" cols="50" placeholder="Wpisz tutaj swój markdown..."></textarea>
+        </div>
+        <div class="form-group">
+          <label for="password">Podaj hasło:</label>
+          <input type="password" id="password" name="password" placeholder="Wpisz hasło" required>
+        </div>
+        <button type="submit" class="submit-button">Dodaj</button>
+      </form>
+      <form action="{{ url_for('logout') }}" method="post">
+        <button type="submit" class="logout-button">Wyloguj</button>
+      </form>
+    </div>
+
+    <div class="notes-container">
+      <div class="notes-section">
+        {% if notes|length > 0 %}
+          {% for note in notes %}
+          <div class="note">
+            <div class="note-content">{{ note.message | safe }}</div>
+            <div class="note-details">
+              <span>Autor:
+                <a href="{{ url_for('user_page', user=note.author) }}">
+                  {{ note.author }}
+                </a>
+              </span>
+              <span>Data utworzenia: {{ note.created_at }}</span>
+              <span>Adres IP: {{ note.ip_address }}</span>
+            </div>
+            <button 
+              class="like-button {% if note.user_liked %}liked{% endif %}" 
+              id="like-btn-{{ note.id }}"
+              onclick="toggleLike('{{ note.id }}')">
+              <span class="like-icon">👍</span>
+              <span class="like-count" id="like-count-{{ note.id }}">{{ note.likes }}</span>
+            </button>
+            <div class="note-extra hidden" id="extra-{{ loop.index }}">
+              <p><strong>Podpis:</strong> {{ note.signature }}</p>
+              <p><strong>Klucz publiczny:</strong> {{ note.public_key }}</p>
+              <p><strong>Notka w BASE64:</strong> {{ note.base_64 }}</p>
+            </div>
+            <button 
+              class="download-button" 
+              onclick="showExtra('{{ loop.index }}')">
+              Pokaż podpis i klucz publiczny
+            </button>
+          </div>
+          {% endfor %}
+        {% else %}
+        <p>Nie ma jeszcze żadnych notatek. Dodaj pierwszą, korzystając z formularza obok!</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function showExtra(index) {
+      const extraSection = document.getElementById(`extra-${index}`);
+      if (extraSection) {
+        extraSection.classList.toggle("hidden");
+      }
+    }
+    
+    async function toggleLike(noteId) {
+      const likeBtn = document.getElementById(`like-btn-${noteId}`);
+      const likeCount = document.getElementById(`like-count-${noteId}`);
+      
+      // Zablokuj przycisk podczas wykonywania żądania
+      likeBtn.disabled = true;
+      
+      try {
+        const response = await fetch(`/like/${noteId}`, {
+          method: 'POST'
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+          // Zaktualizuj liczbę lajków
+          likeCount.textContent = data.likes;
+          
+          // Przełącz klasę "liked"
+          if (data.action === 'liked') {
+            likeBtn.classList.add('liked');
+          } else {
+            likeBtn.classList.remove('liked');
+          }
+        } else {
+          alert(data.message || 'Wystąpił błąd');
+        }
+      } catch (error) {
+        console.error('Błąd:', error);
+        alert('Wystąpił błąd podczas przetwarzania żądania');
+      } finally {
+        // Odblokuj przycisk
+        likeBtn.disabled = false;
+      }
+    }
+  </script>
+</body>
+</html>

@@ -156,22 +156,4 @@ body {
 .strength-high {
     color: green;
 }
-
-.like-button {
-  border: 1px solid #ccc;
-  background: #fff;
-  padding: 6px 10px;
-  border-radius: 6px;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-.like-button[disabled] {
-  opacity: 0.6;
-  cursor: default;
-}
-.thumb { font-size: 1.1em; }
-.count { font-weight: bold; }
-
   
