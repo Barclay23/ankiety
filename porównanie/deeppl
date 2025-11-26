@@ -1,0 +1,409 @@
+def init_db():
+    with sqlite3.connect("users.db") as conn:
+        cursor = conn.cursor()
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS users_of_this_app (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT UNIQUE NOT NULL,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
+                email TEXT UNIQUE NOT NULL,
+                password TEXT NOT NULL,
+                public_key BLOB NOT NULL,
+                private_key BLOB NOT NULL,
+                salt BLOB NOT NULL,
+                iv BLOB NOT NULL,
+                tag BLOB NOT NULL,
+                encrypted_totp_secret BLOB NOT NULL,
+                totp_iv BLOB NOT NULL, 
+                totp_tag BLOB NOT NULL,
+                topt_salt BLOB NOT NULL,
+                reset_password_token TEXT,
+                reset_password_salt BLOB
+            )
+        ''')
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS notes_of_this_app (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                message TEXT NOT NULL,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
+                author TEXT NOT NULL,
+                signature BLOB NOT NULL,
+                ip_address TEXT NOT NULL
+            )
+        ''')
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS logs_of_this_app (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                event_type TEXT NOT NULL,
+                event_details TEXT,
+                user_id INTEGER,
+                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                ip_address TEXT,
+                FOREIGN KEY (user_id) REFERENCES users_of_this_app(id)
+            )
+        ''')
+        # NOWA TABELA DLA LAJKÓW
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS likes_of_this_app (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                note_id INTEGER NOT NULL,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
+                UNIQUE(user_id, note_id),
+                FOREIGN KEY (user_id) REFERENCES users_of_this_app(id),
+                FOREIGN KEY (note_id) REFERENCES notes_of_this_app(id) ON DELETE CASCADE
+            )
+        ''')
+        conn.commit()
+
+def get_note_likes_count(note_id):
+    """Pobiera liczbę lajków dla notatki"""
+    with sqlite3.connect("users.db") as conn:
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT COUNT(*) FROM likes_of_this_app WHERE note_id = ?
+        ''', (note_id,))
+        return cursor.fetchone()[0]
+
+def has_user_liked_note(user_id, note_id):
+    """Sprawdza czy użytkownik już polubił notatkę"""
+    with sqlite3.connect("users.db") as conn:
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT 1 FROM likes_of_this_app WHERE user_id = ? AND note_id = ?
+        ''', (user_id, note_id))
+        return cursor.fetchone() is not None
+
+def add_like_to_db(user_id, note_id):
+    """Dodaje lajka do bazy danych"""
+    try:
+        with sqlite3.connect("users.db") as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                INSERT INTO likes_of_this_app (user_id, note_id)
+                VALUES (?, ?)
+            ''', (user_id, note_id))
+            conn.commit()
+            return True
+    except sqlite3.IntegrityError:
+        # Użytkownik już polubił ten post
+        return False
+    except sqlite3.Error as e:
+        log_event("ERROR", f"Like error: {str(e)}", user_id)
+        return False
+
+def remove_like_from_db(user_id, note_id):
+    """Usuwa lajka z bazy danych"""
+    try:
+        with sqlite3.connect("users.db") as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                DELETE FROM likes_of_this_app WHERE user_id = ? AND note_id = ?
+            ''', (user_id, note_id))
+            conn.commit()
+            return cursor.rowcount > 0
+    except sqlite3.Error as e:
+        log_event("ERROR", f"Unlike error: {str(e)}", user_id)
+        return False
+
+@app.route("/like/<int:note_id>", methods=["POST"])
+def like_note(note_id):
+    delay = 2
+    start_time = time.time()
+    
+    if "user" not in session:
+        if time.time() - start_time < delay:
+            time.sleep(delay - (time.time() - start_time))
+        flash("Musisz być zalogowany, aby lajkować notatki.", "warning")
+        return redirect(url_for("index"))
+    
+    username = session["user"]
+    ip_address = request.headers.get("X-Forwarded-For", request.headers.get("X-Real-IP", request.remote_addr))
+    
+    # Pobierz ID użytkownika
+    with sqlite3.connect("users.db") as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT id FROM users_of_this_app WHERE username = ?", (username,))
+        user = cursor.fetchone()
+        
+        if not user:
+            if time.time() - start_time < delay:
+                time.sleep(delay - (time.time() - start_time))
+            flash("Błąd autoryzacji.", "danger")
+            return redirect(url_for("dashboard"))
+        
+        user_id = user[0]
+        
+        # Sprawdź czy notatka istnieje
+        cursor.execute("SELECT id FROM notes_of_this_app WHERE id = ?", (note_id,))
+        if not cursor.fetchone():
+            if time.time() - start_time < delay:
+                time.sleep(delay - (time.time() - start_time))
+            flash("Notatka nie istnieje.", "danger")
+            return redirect(url_for("dashboard"))
+    
+    action = request.form.get("action", "like")
+    
+    if action == "like":
+        if add_like_to_db(user_id, note_id):
+            log_event("NOTE_LIKED", f"User liked note {note_id}", user_id, ip_address)
+            flash("Polubiono notatkę!", "success")
+        else:
+            flash("Już polubiłeś tę notatkę!", "info")
+    elif action == "unlike":
+        if remove_like_from_db(user_id, note_id):
+            log_event("NOTE_UNLIKED", f"User unliked note {note_id}", user_id, ip_address)
+            flash("Cofnięto like!", "success")
+        else:
+            flash("Nie polubiłeś tej notatki!", "info")
+    
+    if time.time() - start_time < delay:
+        time.sleep(delay - (time.time() - start_time))
+    
+    return redirect(url_for("dashboard"))
+
+@app.route("/dashboard", methods=["GET", "POST"])
+def dashboard():
+    delay = 5
+    start_time = time.time()
+
+    user_ip_address = request.headers.get("X-Forwarded-For", request.headers.get("X-Real-IP", request.remote_addr))
+
+    if "user" in session:
+        username = session['user']
+        
+        # Pobierz ID aktualnego użytkownika
+        with sqlite3.connect("users.db") as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT id FROM users_of_this_app WHERE username = ?", (username,))
+            current_user = cursor.fetchone()
+            current_user_id = current_user[0] if current_user else None
+
+        notes = []
+
+        with sqlite3.connect("users.db") as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT id, message, created_at, signature, ip_address, author 
+                FROM notes_of_this_app 
+                ORDER BY created_at DESC
+                """
+            )
+            user_notes = cursor.fetchall()
+            for note in user_notes:
+                note_id, message, created_at, signature, ip_address, author = note
+                base_64 = base64.b64encode(message.encode('utf-8')).decode('utf-8')
+
+                cursor.execute(
+                    """
+                    SELECT id, public_key 
+                    FROM users_of_this_app 
+                    WHERE username = ?
+                    """, 
+                    (author,)
+                )
+                author_data = cursor.fetchone()
+                if not author_data:
+                    log_event("ERROR", "Missing note author", None, ip_address)
+                    continue
+
+                id, public_key_bytes = author_data
+                public_key = serialization.load_pem_public_key(
+                    public_key_bytes,
+                    backend=default_backend()
+                )
+
+                try:
+                    signature_bytes = signature
+                    public_key.verify(
+                        signature_bytes,
+                        message.encode(),
+                        padding.PSS(
+                            mgf=padding.MGF1(hashes.SHA256()),
+                            salt_length=padding.PSS.MAX_LENGTH
+                        ),
+                        hashes.SHA256()
+                    )
+                    public_key_str = public_key.public_bytes(
+                        encoding=serialization.Encoding.PEM,
+                        format=serialization.PublicFormat.SubjectPublicKeyInfo
+                    ).decode('utf-8')
+
+                    signature_str = base64.b64encode(signature).decode('utf-8')
+                    
+                    # Pobierz liczbę lajków i informację czy aktualny użytkownik polubił
+                    likes_count = get_note_likes_count(note_id)
+                    user_has_liked = has_user_liked_note(current_user_id, note_id) if current_user_id else False
+
+                    notes.append({
+                        "id": note_id,
+                        "public_key": public_key_str,
+                        "message": message,
+                        "author": author,
+                        "created_at": created_at,
+                        "signature": signature_str,
+                        "ip_address": ip_address,
+                        "base_64": base_64,
+                        "likes_count": likes_count,
+                        "user_has_liked": user_has_liked
+                    })
+                except Exception as e:
+                    log_event("ERROR", "Loading_messages_error"+str(e), id, user_ip_address)
+        
+        log_event("NOTES_LOADED", "Notes_loaded", current_user_id, user_ip_address)
+        if time.time() - start_time < delay:
+            time.sleep(delay - (time.time() - start_time))
+        return render_template("hello.html", username=username, notes=notes, current_user_id=current_user_id)
+    else:
+        if time.time() - start_time < delay:
+            time.sleep(delay - (time.time() - start_time))
+        flash("Musisz być zalogowany, aby zobaczyć tę stronę.", "warning")
+        log_event("ERROR", "Someone_not_logged", None, user_ip_address)
+        return redirect(url_for("index"))
+
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Konto</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename = 'css/main.css') }}">
+  <style>
+    .container {
+      display: flex;
+      flex-direction: row;
+      gap: 20px;
+      width: 100%;
+      max-width: 1200px;
+      height: 90vh;
+    }
+    
+    .like-button {
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-size: 1.2em;
+      padding: 5px 10px;
+      border-radius: 5px;
+      transition: all 0.3s ease;
+    }
+    
+    .like-button:hover {
+      background-color: #f0f0f0;
+    }
+    
+    .like-button.liked {
+      color: #007bff;
+    }
+    
+    .like-button:not(.liked) {
+      color: #6c757d;
+    }
+    
+    .likes-count {
+      margin-left: 5px;
+      font-weight: bold;
+    }
+    
+    .like-section {
+      display: flex;
+      align-items: center;
+      margin-top: 10px;
+      gap: 10px;
+    }
+    
+    .note-actions {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 10px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="form-container">
+      <h1>Witaj, {{ username }}!</h1>
+      <form action="{{ url_for('render') }}" method="post">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="form-group">
+          <label for="markdown">Dodaj nową notatkę (markdown):</label>
+          <textarea id="markdown" name="markdown" rows="10" cols="50" placeholder="Wpisz tutaj swój markdown..."></textarea>
+        </div>
+        <div class="form-group">
+          <label for="password">Podaj hasło:</label>
+          <input type="password" id="password" name="password" placeholder="Wpisz hasło" required>
+        </div>
+        <button type="submit" class="submit-button">Dodaj</button>
+      </form>
+      <form action="{{ url_for('logout') }}" method="post">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="logout-button">Wyloguj</button>
+      </form>
+    </div>
+
+    <div class="notes-container">
+      <div class="notes-section">
+        {% if notes|length > 0 %}
+          {% for note in notes %}
+          <div class="note">
+            <div class="note-content">{{ note.message | safe }}</div>
+            <div class="note-details">
+              <span>Autor:
+                <a href="{{ url_for('user_page', user=note.author) }}">
+                  {{ note.author }}
+                </a>
+              </span>
+              <span>Data utworzenia: {{ note.created_at }}</span>
+              <span>Adres IP: {{ note.ip_address }}</span>
+            </div>
+            
+            <!-- SEKCJA LAJKÓW -->
+            <div class="note-actions">
+              <div class="like-section">
+                <form action="{{ url_for('like_note', note_id=note.id) }}" method="post" style="display: inline;">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  {% if note.user_has_liked %}
+                    <input type="hidden" name="action" value="unlike">
+                    <button type="submit" class="like-button liked" title="Cofnij like">
+                      👍 <span class="likes-count">{{ note.likes_count }}</span>
+                    </button>
+                  {% else %}
+                    <input type="hidden" name="action" value="like">
+                    <button type="submit" class="like-button" title="Polub notatkę">
+                      👍 <span class="likes-count">{{ note.likes_count }}</span>
+                    </button>
+                  {% endif %}
+                </form>
+              </div>
+              
+              <button class="download-button" onclick="showExtra('{{ loop.index }}')">
+                Pokaż podpis i klucz publiczny
+              </button>
+            </div>
+            
+            <div class="note-extra hidden" id="extra-{{ loop.index }}">
+              <p><strong>Podpis:</strong> {{ note.signature }}</p>
+              <p><strong>Klucz publiczny:</strong> {{ note.public_key }}</p>
+              <p><strong>Notka w BASE64:</strong> {{ note.base_64 }}</p>
+            </div>
+          </div>
+          {% endfor %}
+        {% else %}
+        <p>Nie ma jeszcze żadnych notatek. Dodaj pierwszą, korzystając z formularza obok!</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function showExtra(index) {
+      const extraSection = document.getElementById(`extra-${index}`);
+      if (extraSection) {
+        extraSection.classList.toggle("hidden");
+      }
+    }
+  </script>
+</body>
+</html>
